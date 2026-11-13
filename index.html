@@ -1,0 +1,1576 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Tietosuoja: sivu ei lataa eikä lähetä mitään verkosta. Kaikki koodi ja tyylit ovat tässä tiedostossa,
+     ja alla oleva sääntö estää selainta ottamasta yhteyttä muihin osoitteisiin. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050303">
+<meta name="description" content="Yösovellus heräämisten kirjaamiseen ja valkoiseen kohinaan. Merkinnät pysyvät vain omassa selaimessa.">
+<title>Yön häiriöloki</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050303'/%3E%3Cpath d='M12 26c6.7-8 13.3-8 20 0s13.3 8 20 0M12 40c6.7-8 13.3-8 20 0s13.3 8 20 0' fill='none' stroke='%23d9826a' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* Layout: yhden ruudun yöinstrumentti – ylärivi (kello, kohinan asetukset, loki), kaksi koko leveyden kosketusaluetta (ylhäällä kirjaus + kohina, alhaalla pelkkä kirjaus) ja alarivi viimeisimmälle merkinnälle; loki ja asetukset ovat erillisiä, vieritettäviä näkymiä. */
+/* Tietoisesti yksi tumma teema: sivua käytetään pimeässä, joten väreinä vain himmeä punainen yövalo mustalla. */
+:root {
+  --void: #050303;      /* pohja: lähes musta, lämmin sävy */
+  --surface: #130806;   /* kentät, lomakkeet ja kohina-alueen pohja */
+  --line: #3a1a12;      /* hiusviivat */
+  --edge: #8a4636;      /* painikkeiden ja kenttien reunat */
+  --ember: #3d120b;     /* kirjausalueen hehku, valittu tila */
+  --glow: #d9826a;      /* pääteksti */
+  --glow-dim: #b3614b;  /* toissijainen teksti */
+  --amber: #c9974a;     /* varoitus, odottava tallennus */
+  /* Laitteen omat fontit: ei latauksia verkosta. */
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", "Liberation Mono", monospace;
+  color-scheme: dark;
+}
+
+html { box-sizing: border-box; height: 100%; background: var(--void); }
+*, *::before, *::after { box-sizing: inherit; }
+[hidden] { display: none !important; }
+
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--void);
+  color: var(--glow);
+  font: 400 1rem/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background: var(--void);
+}
+
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; }
+button:disabled { cursor: default; opacity: .45; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--glow-dim);
+  outline-offset: 3px;
+}
+.sr { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- yhteiset ohjaimet ---------- */
+.pill {
+  min-height: 44px;
+  padding-inline: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  color: var(--glow);
+  font-size: .9375rem;
+}
+.pill:active { background: var(--surface); }
+.pill.solid { background: var(--ember); border-color: var(--glow-dim); }
+.pill-count { font-family: var(--font-num); color: var(--glow-dim); font-variant-numeric: tabular-nums; }
+.pill-count:empty { display: none; }
+.iconbtn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  color: var(--glow-dim);
+}
+.iconbtn:active { background: var(--surface); }
+.iconbtn svg { width: 22px; height: 22px; }
+.textbtn {
+  min-height: 40px;
+  padding-inline: 6px;
+  color: var(--glow-dim);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  min-height: 40px;
+  padding-inline: 13px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  color: var(--glow-dim);
+  font-size: .9375rem;
+}
+.chip[aria-pressed="true"] { color: var(--glow); background: var(--ember); border-color: var(--glow-dim); }
+.eyebrow, .field-label {
+  margin: 0;
+  font: 700 .8125rem/1.2 var(--font-body);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--glow-dim);
+}
+
+/* ---------- yön aikajana (lokissa) ---------- */
+.strip { padding-inline: 12px; }
+.strip-track { position: relative; height: 26px; border-bottom: 1px solid var(--edge); }
+.tick { position: absolute; bottom: 0; width: 1px; height: 5px; margin-left: -.5px; background: var(--edge); }
+.tick.major { height: 10px; }
+.nband { position: absolute; bottom: 0; height: 9px; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--glow-dim) 32%, transparent); }
+.mark { position: absolute; top: 2px; bottom: 0; width: 3px; margin-left: -1.5px; border-radius: 2px 2px 0 0; background: var(--glow); }
+.strip-labels { position: relative; height: 20px; }
+.lbl {
+  position: absolute;
+  top: 5px;
+  transform: translateX(-50%);
+  font: 400 .75rem/1 var(--font-num);
+  color: var(--glow-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- yönäkymä ---------- */
+.night {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-block: 0 max(12px, env(safe-area-inset-bottom, 0px));
+  transition: opacity .25s ease;
+}
+/* Kohinan aikana näkymä himmenee lähes mustaksi; kosketus palauttaa sen. */
+body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
+
+.bar { flex: none; display: flex; align-items: center; gap: 10px; padding-top: 10px; }
+.clock { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
+.clock-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+.clock-time { font: 400 1.75rem/1 var(--font-num); letter-spacing: .01em; color: var(--glow-dim); font-variant-numeric: tabular-nums; }
+.clock-date, .clock-status { font-size: .8125rem; line-height: 1.35; color: var(--glow-dim); font-variant-numeric: tabular-nums; }
+#status[data-state="warn"] { color: var(--amber); }
+
+.zone {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 7.5rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 16px;
+  text-align: center;
+  color: var(--glow);
+  border-radius: 22px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform .12s ease, box-shadow .2s ease;
+}
+.zone:active { transform: scale(.99); }
+.zone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 1px var(--glow-dim);
+  opacity: 0;
+  pointer-events: none;
+}
+.zone.pulse::after { animation: ring .9s ease-out 1; }
+@keyframes ring { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.03); } }
+
+/* Yläalue: hiljainen tumma pinta, syttyy kun kohina soi. */
+.zone-noise {
+  background: var(--surface);
+  background: radial-gradient(130% 100% at 50% 30%, color-mix(in srgb, var(--surface), var(--glow) 5%), var(--surface) 60%, color-mix(in srgb, var(--surface), var(--void) 60%));
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+.zone-noise.is-playing {
+  background: var(--ember);
+  background: radial-gradient(130% 100% at 50% 30%, color-mix(in srgb, var(--ember), var(--glow) 9%), var(--ember) 55%, color-mix(in srgb, var(--ember), var(--void) 60%));
+  box-shadow: inset 0 0 0 2px var(--glow-dim);
+}
+/* Alaalue: lämmin hehku, sama kuin aiempi pyöreä nappi. */
+.zone-wake {
+  background: var(--ember);
+  background: radial-gradient(130% 100% at 50% 30%, color-mix(in srgb, var(--ember), var(--glow) 7%), var(--ember) 55%, color-mix(in srgb, var(--ember), var(--void) 60%));
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+.zone-icon { flex: none; color: var(--glow-dim); }
+.zone-icon.wave { width: 44px; height: 22px; }
+.zone-icon.dial { width: 24px; height: 24px; }
+.zone-noise.is-playing .zone-icon { color: var(--glow); }
+.zone-main { font: 700 clamp(1.625rem, 7.6vw, 2.25rem)/1.1 var(--font-body); letter-spacing: .01em; }
+.zone-main.is-time { font: 400 clamp(2rem, 10vw, 2.75rem)/1 var(--font-num); font-variant-numeric: tabular-nums; }
+.zone-sub { font-size: .9375rem; line-height: 1.35; color: var(--glow-dim); font-variant-numeric: tabular-nums; }
+.zone-noise.is-playing .zone-sub, .zone-wake .zone-sub { color: var(--glow); }
+
+.foot { flex: none; min-height: 4.5rem; display: grid; align-content: end; gap: 8px; }
+.foot-note { margin: 0; font-size: .875rem; line-height: 1.35; color: var(--amber); }
+.after { display: grid; gap: 6px; }
+.after-q { margin: 0; font-size: .9375rem; }
+.after-q span { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.after-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.after-row .textbtn { margin-left: auto; }
+.tonight { display: grid; gap: 4px; }
+.tonight-text { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* ---------- loki- ja asetusnäkymä ---------- */
+.page { max-width: 40rem; margin-inline: auto; padding-block: 0 56px; }
+.page-head {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding-block: 12px;
+  background: var(--void);
+  border-bottom: 1px solid var(--line);
+}
+.page-title { margin: 0; font: 700 1.375rem/1.2 var(--font-body); }
+.page-title:focus { outline: none; }
+.page-head .pill-stop { margin-left: auto; }
+.summary { margin: 18px 0 12px; font-size: 1.125rem; font-variant-numeric: tabular-nums; text-wrap: balance; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.msg { min-height: 1.5em; margin: 10px 0 0; font-size: .9375rem; color: var(--glow-dim); }
+
+.add {
+  margin-top: 12px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.add-title { margin: 0 0 4px; font: 700 1.125rem/1.3 var(--font-body); }
+.add-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+.input, .note {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--glow);
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+.add .input { background: var(--void); }
+.input::placeholder, .note::placeholder { color: var(--glow-dim); opacity: 1; }
+
+.empty { margin-top: 28px; display: grid; gap: 8px; color: var(--glow-dim); }
+.empty p { margin: 0; max-width: 34rem; }
+
+.ngroup { margin-top: 30px; display: grid; gap: 6px; }
+.ngroup-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ngroup-title { margin: 0; font: 500 1rem/1.2 var(--font-num); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.ngroup-count { font-size: .875rem; color: var(--glow-dim); }
+
+.entry { display: grid; gap: 12px; padding-block: 14px; border-top: 1px solid var(--line); }
+.entry-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.entry-top .del { margin-left: auto; }
+/* Leveys sisällön mukaan: 12 tunnin kellossa kentässä on myös AM/PM. */
+.t-edit {
+  width: auto;
+  min-width: 7rem;
+  padding: 2px 0;
+  font: 400 1.5rem/1.2 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--glow);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--edge);
+}
+.t-edit::-webkit-calendar-picker-indicator { opacity: .7; filter: sepia(1) saturate(3) hue-rotate(-20deg) brightness(.8); }
+.entry-day { color: var(--glow-dim); font-variant-numeric: tabular-nums; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { padding: 1px 7px; font-size: .8125rem; color: var(--glow-dim); border: 1px solid var(--line); border-radius: 6px; font-variant-numeric: tabular-nums; }
+.tag-noise { color: var(--glow); border-color: var(--edge); }
+.del.is-confirm { color: var(--glow); }
+.field { display: grid; grid-template-columns: 5.25rem minmax(0, 1fr); align-items: start; gap: 8px; }
+.field .field-label { padding-top: 12px; }
+
+.report { margin-top: 36px; padding-top: 12px; border-top: 1px solid var(--line); }
+.report summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--glow-dim); }
+.report textarea {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  font: 400 .875rem/1.55 var(--font-num);
+  color: var(--glow);
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.pgroup { margin-top: 26px; display: grid; gap: 10px; }
+.help { margin: 0; max-width: 34rem; font-size: .9375rem; color: var(--glow-dim); }
+.now { margin: 0; font-variant-numeric: tabular-nums; }
+.range-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.range-out { font: 400 .9375rem/1 var(--font-num); color: var(--glow); font-variant-numeric: tabular-nums; }
+/* Liukusäätimet itse piirrettyinä: selaimen oma vaalea ura häikäisisi pimeässä. */
+.range { --p: 50%; -webkit-appearance: none; appearance: none; width: 100%; height: 44px; margin: 0; background: transparent; }
+.range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--edge) var(--p), var(--line) var(--p)); }
+.range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: var(--glow-dim); border: 3px solid var(--void); box-shadow: 0 0 0 1px var(--edge); }
+.range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--line); }
+.range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--edge); }
+.range::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--glow-dim); border: 3px solid var(--void); box-shadow: 0 0 0 1px var(--edge); }
+.range-ends { display: flex; justify-content: space-between; margin-top: -6px; font-size: .875rem; color: var(--glow-dim); }
+.tips { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 34rem; color: var(--glow-dim); }
+
+@media (max-width: 360px) {
+  .field { grid-template-columns: minmax(0, 1fr); }
+  .field .field-label { padding-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zone, .night, body.is-dim .night { transition: none; }
+  .zone.pulse::after { animation: none; }
+}
+</style>
+</head>
+<body>
+<noscript><p style="padding:16px">Yön häiriöloki tarvitsee JavaScriptin.</p></noscript>
+
+<div id="sr" class="sr" aria-live="polite"></div>
+
+<main id="night" class="night">
+  <h1 class="sr">Yön häiriöloki</h1>
+  <header class="bar">
+    <div class="clock">
+      <div class="clock-row"><span id="clock-time" class="clock-time">–.––</span><span id="clock-date" class="clock-date"></span></div>
+      <div id="status" class="clock-status" data-state="ok">Tallessa vain tässä selaimessa</div>
+    </div>
+    <button type="button" class="iconbtn" data-act="open-prefs" data-key="open-prefs" aria-label="Asetukset">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h3M13 17h7"/><circle cx="16" cy="7" r="2.5"/><circle cx="10" cy="17" r="2.5"/></svg>
+    </button>
+    <button type="button" class="pill" data-act="open-log" data-key="open-log">Loki <span id="log-count" class="pill-count"></span></button>
+  </header>
+
+  <button type="button" id="zone-noise" class="zone zone-noise" data-act="zone-noise" data-key="zone-noise">
+    <svg class="zone-icon wave" viewBox="0 0 44 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 7c3.3-4 6.7-4 10 0s6.7 4 10 0 6.7-4 10 0 6.7 4 10 0"/><path d="M2 15c3.3-4 6.7-4 10 0s6.7 4 10 0 6.7-4 10 0 6.7 4 10 0"/></svg>
+    <span id="zn-main" class="zone-main">Heräsin + kohina</span>
+    <span id="zn-sub" class="zone-sub">kirjaa ja soita kohinaa</span>
+  </button>
+
+  <button type="button" id="zone-wake" class="zone zone-wake" data-act="zone-wake" data-key="zone-wake">
+    <svg class="zone-icon dial" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2.5"/></svg>
+    <span id="zw-main" class="zone-main">Heräsin</span>
+    <span id="zw-sub" class="zone-sub">kirjaa kellonaika</span>
+  </button>
+
+  <div class="foot">
+    <p id="foot-note" class="foot-note" hidden></p>
+    <section id="after" class="after" aria-label="Viimeisin merkintä" hidden>
+      <p class="after-q">Kirjattu klo <span id="after-time"></span>. Mikä ääni herätti?</p>
+      <div class="after-row">
+        <span id="after-chips" class="chips"></span>
+        <button type="button" class="textbtn" data-act="undo" data-key="undo">Peru</button>
+      </div>
+    </section>
+    <section id="tonight" class="tonight" aria-labelledby="tonight-h">
+      <h2 id="tonight-h" class="eyebrow">Tänä yönä</h2>
+      <p id="tonight-text" class="tonight-text">Ei merkintöjä.</p>
+    </section>
+  </div>
+</main>
+
+<main id="log" class="page" hidden>
+  <header class="page-head">
+    <button type="button" class="pill" data-act="close-view" data-key="close-log">‹ Yönäkymä</button>
+    <h1 id="log-title" class="page-title" tabindex="-1">Loki</h1>
+    <button type="button" id="log-stop" class="pill pill-stop" data-act="noise-stop" data-key="log-stop" hidden>Lopeta kohina</button>
+  </header>
+
+  <p id="log-summary" class="summary">Ei vielä merkintöjä.</p>
+  <div class="actions">
+    <button type="button" id="btn-copy" class="pill" data-act="copy" data-key="copy">Kopioi raportti</button>
+    <button type="button" id="btn-download" class="pill" data-act="download" data-key="download">Tallenna tiedostona</button>
+    <button type="button" id="btn-add" class="pill" data-act="add-open" data-key="add-open">Lisää jälkikäteen</button>
+  </div>
+  <p id="log-msg" class="msg" role="status" aria-live="polite"></p>
+
+  <form id="add" class="add" novalidate hidden>
+    <h2 class="add-title">Lisää herääminen jälkikäteen</h2>
+    <label class="field-label" for="add-when">Milloin heräsit?</label>
+    <input id="add-when" class="input" type="datetime-local">
+    <div class="field"><span class="field-label" id="add-kind-l">Ääni</span><div id="add-kinds" class="chips" role="group" aria-labelledby="add-kind-l"></div></div>
+    <div class="field"><span class="field-label" id="add-awake-l">Valvoin</span><div id="add-awakes" class="chips" role="group" aria-labelledby="add-awake-l"></div></div>
+    <label class="field-label" for="add-note">Muistiinpano</label>
+    <input id="add-note" class="input" type="text" maxlength="300" autocomplete="off" placeholder="esim. aika on arvio">
+    <div class="add-row">
+      <button type="submit" class="pill solid">Tallenna</button>
+      <button type="button" class="pill" data-act="add-cancel">Peruuta</button>
+    </div>
+    <p id="add-msg" class="msg" role="status"></p>
+  </form>
+
+  <div id="log-empty" class="empty">
+    <p>Loki on tyhjä. Kun heräät ääneen, napauta yönäkymän alaosaa, tai yläosaa jos haluat samalla kohinan. Kellonaika tallentuu heti.</p>
+    <p>Aiemman heräämisen voit lisätä Lisää jälkikäteen -napista.</p>
+  </div>
+
+  <div id="log-list"></div>
+
+  <details id="report-box" class="report">
+    <summary>Näytä raportti tekstinä</summary>
+    <label class="sr" for="report">Raportti</label>
+    <textarea id="report" readonly rows="12"></textarea>
+  </details>
+</main>
+
+<main id="prefs" class="page" hidden>
+  <header class="page-head">
+    <button type="button" class="pill" data-act="close-view" data-key="close-prefs">‹ Yönäkymä</button>
+    <h1 id="prefs-title" class="page-title" tabindex="-1">Asetukset</h1>
+  </header>
+
+  <section class="pgroup" aria-labelledby="p-dur-l">
+    <h2 id="p-dur-l" class="field-label">Kesto</h2>
+    <p class="help">Kun käynnistät kohinan yläosan alueesta.</p>
+    <div id="p-dur" class="chips" role="group" aria-labelledby="p-dur-l"></div>
+  </section>
+
+  <section class="pgroup" aria-labelledby="p-fade-l">
+    <h2 id="p-fade-l" class="field-label">Hiljeneminen lopussa</h2>
+    <div id="p-fade" class="chips" role="group" aria-labelledby="p-fade-l"></div>
+    <p id="p-fade-help" class="help"></p>
+  </section>
+
+  <section class="pgroup" aria-labelledby="p-sound-l">
+    <h2 id="p-sound-l" class="field-label">Ääni</h2>
+    <div><button type="button" id="p-listen" class="pill solid" data-act="listen" data-key="listen">Kuuntele kohinaa</button></div>
+    <p id="p-now" class="now" hidden></p>
+    <p class="help">Kuuntelu ei kirjaa heräämistä. Säädä voimakkuus ja sävy kuunnellessasi. Kohina jatkuu yönäkymässä ja loppuu ajastimen mukaan.</p>
+  </section>
+
+  <section class="pgroup">
+    <div class="range-head"><label class="field-label" for="p-vol">Voimakkuus</label><output id="p-vol-out" class="range-out" for="p-vol"></output></div>
+    <input id="p-vol" class="range" type="range" min="0" max="100" step="1">
+  </section>
+
+  <section class="pgroup">
+    <label class="field-label" for="p-tone">Sävy</label>
+    <input id="p-tone" class="range" type="range" min="0" max="100" step="1" aria-describedby="p-tone-help">
+    <div class="range-ends" aria-hidden="true"><span>Kirkas</span><span>Pehmeä</span></div>
+    <p id="p-tone-help" class="help">Pehmeämpi sävy vaimentaa korkeinta sihinää. Vasen reuna on puhdas valkoinen kohina.</p>
+  </section>
+
+  <section class="pgroup" aria-labelledby="p-screen-l">
+    <h2 id="p-screen-l" class="field-label">Näyttö</h2>
+    <div id="p-screen" class="chips" role="group" aria-labelledby="p-screen-l"></div>
+    <p id="p-screen-help" class="help"></p>
+    <p id="p-screen-state" class="now" hidden></p>
+  </section>
+
+  <section class="pgroup" aria-labelledby="p-tips-l">
+    <h2 id="p-tips-l" class="field-label">Yöllä</h2>
+    <ul class="tips">
+      <li>Jätä tämä sivu auki yönäkymään. Laturi ei ole pakollinen, mutta ilman sitä akkua kuluu yön aikana.</li>
+      <li>Näyttö himmenee 20 sekunnissa lähes mustaksi. Kosketus palauttaa näkymän.</li>
+      <li>Jos näyttö silti lukittuu, kohina voi katketa, ja lokiin tallentuu arvio katkeamisajasta.</li>
+      <li>Pidä voimakkuus maltillisena, etenkin jos kohina soi tunteja.</li>
+    </ul>
+  </section>
+
+  <section class="pgroup" aria-labelledby="p-data-l">
+    <h2 id="p-data-l" class="field-label">Tiedot</h2>
+    <p class="help">Merkinnät ja asetukset tallentuvat vain tämän selaimen muistiin tällä laitteella. Sivu ei lähetä tietoja mihinkään.</p>
+    <p class="help">Merkinnät eivät siirry toiseen selaimeen tai puhelimeen, ja ne poistuvat, jos tyhjennät selaimen tiedot. Tallenna raportti tiedostoksi, jos haluat säilyttää sen.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (s) => document.querySelector(s);
+  const WD = ["su", "ma", "ti", "ke", "to", "pe", "la"];
+  const KINDS = [["huuto", "Huuto, ääntely"], ["kolina", "Kolina, askeleet"], ["muu", "Muu ääni"]];
+  const KINDS_SHORT = [["huuto", "Huuto"], ["kolina", "Kolina"], ["muu", "Muu"]];   // yöllä lyhyet
+  const AWAKES = [[15, "alle 15 min"], [30, "½ h"], [60, "1 h"], [120, "2 h"], [180, "3 h+"]];
+  const DURS = [[5, "5 min"], [15, "15 min"], [30, "30 min"], [60, "1 h"], [120, "2 h"], [300, "5 h"], [0, "Ei ajastinta"]];
+  const FADES = [[1, "1 min"], [5, "5 min"], [10, "10 min"], [20, "20 min"]];
+  const SCREENS = [[1, "Päällä yönäkymässä"], [0, "Vain kohinan aikana"]];
+  const KIND_TXT = { huuto: "huuto tai ääntely", kolina: "kolina tai askeleet", muu: "muu ääni" };
+  const AWAKE_TXT = { 15: "valvoin alle 15 min", 30: "valvoin noin puoli tuntia", 60: "valvoin noin tunnin", 120: "valvoin noin 2 tuntia", 180: "valvoin yli 3 tuntia" };
+  const EVENTS_KEY = "hairioloki.events.v1";
+  const PREFS_KEY = "hairioloki.prefs.v1";
+  const NOISE_KEY = "hairioloki.noise.v1";
+  const DEFAULT_PREFS = { dur: 60, fade: 10, vol: 65, tone: 35, screen: true, updated: 0 };
+  const WIN_START = 20;          // aikajana alkaa klo 20
+  const WIN_HOURS = 12;          // ja päättyy klo 8
+  const RECENT_MS = 180000;      // 3 min: uusi napautus ei tee tuplamerkintää
+  const TAP_GUARD_MS = 1200;     // estää vahingossa tulevan tuplanapautuksen
+  const FADE_IN = 2.5;           // s, kohinan pehmeä alku
+  const STOP_FADE = 1.5;         // s, lopetus napista
+  const DIM_AFTER_MS = 20000;    // himmennys kohinan aikana
+
+  // ---------- aika ----------
+  const pad = (n) => String(n).padStart(2, "0");
+  const fmtTime = (d) => d.getHours() + "." + pad(d.getMinutes());
+  const fmtDM = (d) => d.getDate() + "." + (d.getMonth() + 1) + ".";
+  const fmtWDM = (d) => WD[d.getDay()] + " " + fmtDM(d);
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  // Yö vaihtuu keskipäivällä: klo 2.14 kuuluu edellisen illan yöhön.
+  const nightStart = (t) => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getHours() < 12 ? 1 : 0)); };
+  const dayKey = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  const nightKey = (t) => dayKey(nightStart(t));
+  const nightLabel = (s) => {
+    const e = addDays(s, 1);
+    return WD[s.getDay()] + "–" + WD[e.getDay()] + " " + (s.getMonth() === e.getMonth() ? s.getDate() + "." : fmtDM(s)) + "–" + fmtDM(e);
+  };
+  const countWake = (n) => (n === 1 ? "1 herääminen" : n + " heräämistä");
+  const toLocalInput = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const newId = (t) => "e" + t.toString(36) + Math.random().toString(36).slice(2, 8);
+  const numFi = (x) => String(Math.round(x * 10) / 10).replace(".", ",");
+  const fmtMin = (m) => {
+    if (m >= 60) { const h = Math.floor(m / 60), r = Math.round(m - h * 60); return h + " h" + (r ? " " + r + " min" : ""); }
+    return numFi(m) + " min";
+  };
+
+  // ---------- tila ----------
+  // Kaikki tiedot ovat vain tämän selaimen localStoragessa. Sivu ei lähetä mitään minnekään.
+  const S = { storageOk: storageWorks() };
+  let events = loadEvents();               // id -> merkintä
+  let prefs = loadPrefs();
+  let orphan = readHeartbeat();            // edellinen kohina, joka katkesi sivun sulkeutuessa
+  let latestId = null, lastTap = 0;
+  let delConfirm = null, delTimer = null, afterTimer = null, msgTimer = null;
+  let wakeFlash = null, flashTimer = null, dimTimer = null, footTimer = null, footNote = "";
+  let queued = false, listDirty = false, lastNight = nightKey(Date.now());
+  const addState = { kind: "", awake: null };
+  const noteTimers = new Map();
+  // Kohinamoottori: yksi AudioContext, jonka ääni kulkee suotimien ja kahden vahvistimen läpi.
+  const N = { ctx: null, nodes: null, bufL: null, bufR: null, srcs: null, dying: null, session: null, seq: 0, endTimer: null, wakeLock: null, wakeState: "", wakePending: false, wakeTry: 0 };
+
+  // Yksityisessä selaustilassa tai jos sivuston tiedot on estetty, localStorage ei ehkä toimi.
+  function storageWorks() {
+    try {
+      const k = "hairioloki.test";
+      localStorage.setItem(k, "1");
+      localStorage.removeItem(k);
+      return true;
+    } catch (e) { return false; }
+  }
+  function loadEvents() {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(EVENTS_KEY) || "null"); } catch (e) { raw = null; }
+    const out = {};
+    if (!raw || typeof raw !== "object") return out;
+    for (const k of Object.keys(raw)) {
+      const ev = raw[k];
+      if (/^[a-z0-9]{1,40}$/.test(k) && ev && typeof ev === "object" && typeof ev.t === "number") out[k] = ev;
+    }
+    return out;
+  }
+  function saveEvents() {
+    try { localStorage.setItem(EVENTS_KEY, JSON.stringify(events)); S.storageOk = true; }
+    catch (e) { S.storageOk = false; }   // esim. tila täynnä: merkinnät säilyvät vain tämän käynnin ajan
+  }
+
+  function sanitizePrefs(p) {
+    const o = Object.assign({}, DEFAULT_PREFS);
+    if (!p || typeof p !== "object") return o;
+    const ok = (v, lo, hi) => typeof v === "number" && isFinite(v) && v >= lo && v <= hi;
+    if (ok(p.dur, 0, 720)) o.dur = p.dur;
+    if (ok(p.fade, 0.05, 60)) o.fade = p.fade;
+    if (ok(p.vol, 0, 100)) o.vol = Math.round(p.vol);
+    if (ok(p.tone, 0, 100)) o.tone = Math.round(p.tone);
+    if (typeof p.screen === "boolean") o.screen = p.screen;
+    if (ok(p.updated, 0, 1e15)) o.updated = p.updated;
+    return o;
+  }
+  function loadPrefs() {
+    try { return sanitizePrefs(JSON.parse(localStorage.getItem(PREFS_KEY) || "null")); } catch (e) { return sanitizePrefs(null); }
+  }
+  function storePrefsLocal() {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* muistiin riittää */ }
+  }
+
+  function readHeartbeat() {
+    try {
+      const r = JSON.parse(localStorage.getItem(NOISE_KEY) || "null");
+      return r && typeof r.s === "number" ? r : null;
+    } catch (e) { return null; }
+  }
+  function writeHeartbeat() {
+    const s = N.session;
+    if (!s) return;
+    try { localStorage.setItem(NOISE_KEY, JSON.stringify({ eventId: s.eventId, s: s.s, last: Date.now(), end: s.end })); } catch (e) { /* ei kriittinen */ }
+  }
+  function clearHeartbeat() {
+    try { localStorage.removeItem(NOISE_KEY); } catch (e) { /* ei kriittinen */ }
+  }
+
+  function allEvents() {
+    const out = [];
+    for (const id of Object.keys(events)) {
+      const ev = events[id];
+      if (ev && typeof ev.t === "number") out.push(Object.assign({ id }, ev));
+    }
+    return out.sort((a, b) => b.t - a.t);
+  }
+  function getEvent(id) {
+    const ev = id ? events[id] : null;
+    return ev ? Object.assign({}, ev) : null;
+  }
+  const noiseSegs = (e) => (Array.isArray(e.noise) ? e.noise.filter((g) => g && typeof g.s === "number") : []);
+  const baseEvent = (t) => ({ t, kind: "", awake: null, note: "", manual: false, timeEdited: false, created: t, updated: t, v: 1 });
+
+  // ---------- tallennus ----------
+  function putEvent(id, ev) {
+    if (ev === null) delete events[id]; else events[id] = ev;
+    saveEvents();
+    render();
+  }
+  function patchEvent(id, patch) {
+    const ev = getEvent(id);
+    if (!ev) return;
+    putEvent(id, Object.assign(ev, patch, { updated: Date.now() }));
+  }
+  function savePrefs() {
+    prefs.updated = Date.now();
+    storePrefsLocal();
+  }
+
+  // Jos sovellus on auki useassa välilehdessä, toisen välilehden muutokset luetaan tähänkin.
+  window.addEventListener("storage", (ev) => {
+    if (ev.key === EVENTS_KEY || ev.key === null) { events = loadEvents(); render(); }
+    if (ev.key === PREFS_KEY || ev.key === null) {
+      prefs = loadPrefs();
+      applyVolume();
+      applyTone();
+      syncScreen();
+      scheduleDim();
+      render();
+    }
+  });
+
+  // ---------- kohina ----------
+  // Valkoinen kohina tehdään sivulla: kaksi eripituista satunnaispuskuria (vasen ja oikea kanava)
+  // soivat silmukkana. Silmukka on näytetarkka, joten saumaa tai taukoa ei synny, ja eri pituudet
+  // estävät kuviota toistumasta tahdissa. Suotimet ovat silmukan jälkeen, joten niissäkään ei ole saumaa.
+  const volGain = (v) => (v <= 0 ? 0 : Math.pow(10, (-42 * (1 - v / 100)) / 20));
+  const toneValues = (t) => { const x = Math.min(1, Math.max(0, t / 100)); return { shelf: -10 * x, lp: 20000 * Math.pow(5500 / 20000, x) }; };
+
+  function makeNoise(ctx, n) {
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.5;
+    return buf;
+  }
+
+  function ensureAudio() {
+    if (N.ctx) return N.ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    // iPhonessa ääni soi näin myös äänettömällä kytkimellä, kuten musiikki.
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) { /* ei tukea */ }
+    let ctx = null;
+    try { ctx = new AC({ latencyHint: "playback" }); } catch (e) { try { ctx = new AC(); } catch (e2) { return null; } }
+    try {
+      const merger = ctx.createChannelMerger(2);
+      const shelf = ctx.createBiquadFilter();
+      shelf.type = "highshelf";
+      shelf.frequency.value = 4000;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.Q.value = -3;   // loiva, ilman korostusta
+      const fade = ctx.createGain();
+      fade.gain.value = 0;
+      const vol = ctx.createGain();
+      merger.connect(shelf);
+      shelf.connect(lp);
+      lp.connect(fade);
+      fade.connect(vol);
+      vol.connect(ctx.destination);
+      const tv = toneValues(prefs.tone);
+      shelf.gain.value = tv.shelf;
+      lp.frequency.value = Math.min(tv.lp, ctx.sampleRate / 2 - 200);
+      vol.gain.value = volGain(prefs.vol);
+      N.nodes = { merger, shelf, lp, fade, vol };
+      N.bufL = makeNoise(ctx, Math.round(ctx.sampleRate * 23.3) | 1);
+      N.bufR = makeNoise(ctx, Math.round(ctx.sampleRate * 29.7));
+    } catch (e) {
+      try { ctx.close(); } catch (e2) { /* ohitetaan */ }
+      N.nodes = null;
+      return null;
+    }
+    ctx.onstatechange = () => {
+      if (!N.session) return;
+      if (ctx.state === "running") N.session.ran = true;
+      setTimeout(audioHealth, 1500);
+      render();
+    };
+    N.ctx = ctx;
+    return ctx;
+  }
+
+  function applyVolume() {
+    if (!N.nodes) return;
+    N.nodes.vol.gain.setTargetAtTime(volGain(prefs.vol), N.ctx.currentTime, 0.05);
+  }
+  function applyTone() {
+    if (!N.nodes) return;
+    const tv = toneValues(prefs.tone), t = N.ctx.currentTime;
+    N.nodes.shelf.gain.setTargetAtTime(tv.shelf, t, 0.05);
+    N.nodes.lp.frequency.setTargetAtTime(Math.min(tv.lp, N.ctx.sampleRate / 2 - 200), t, 0.05);
+  }
+
+  // Ajastettu hiljeneminen ajetaan äänisäikeessä, joten se toimii vaikka sivu olisi taustalla.
+  // Hiljeneminen on tasainen desibeleinä (eksponentiaalinen), jolloin korva ei huomaa yhtäkkistä muutosta.
+  function planSchedule(s, t, from) {
+    const g = N.nodes.fade.gain;
+    const v0 = Math.max(from, 0.0001);
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(v0, t);
+    g.exponentialRampToValueAtTime(1, t + FADE_IN);
+    const sch = { t0: t, v0, tf: null, tEnd: null };
+    s.end = null;
+    s.fadeAt = null;
+    if (prefs.dur > 0) {
+      const dur = prefs.dur * 60;
+      const fade = Math.max(3, Math.min(prefs.fade * 60, dur / 2));
+      sch.tEnd = t + dur;
+      sch.tf = Math.max(t + FADE_IN, sch.tEnd - fade);
+      g.setValueAtTime(1, sch.tf);
+      g.exponentialRampToValueAtTime(0.001, sch.tEnd);
+      g.linearRampToValueAtTime(0, sch.tEnd + 0.25);
+      const now = Date.now();
+      s.end = now + dur * 1000;
+      s.fadeAt = now + (sch.tf - t) * 1000;
+    }
+    s.sched = sch;
+    clearTimeout(N.endTimer);
+    if (s.end) N.endTimer = setTimeout(() => onEndTimer(s), s.end - Date.now() + 400);
+    writeHeartbeat();
+  }
+  function fadeValueAt(s, t) {
+    const c = s.sched;
+    if (!c) return 0;
+    if (t <= c.t0) return c.v0;
+    if (t < c.t0 + FADE_IN) return c.v0 * Math.pow(1 / c.v0, (t - c.t0) / FADE_IN);
+    if (c.tf === null || t < c.tf) return 1;
+    if (t < c.tEnd) return Math.pow(0.001, (t - c.tf) / (c.tEnd - c.tf));
+    return 0;
+  }
+
+  function noiseStart(eventId, now) {
+    if (N.session) return true;
+    const ctx = ensureAudio();
+    if (!ctx) { setFootNote("Tämä selain ei pysty soittamaan kohinaa.", true); return false; }
+    try { if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } } catch (e) { /* tarkistetaan alla */ }
+    if (N.dying) { for (const x of N.dying) { try { x.stop(); } catch (e) { /* jo pysähtynyt */ } } N.dying = null; }
+    const t = ctx.currentTime;
+    const srcs = [];
+    try {
+      [[N.bufL, 0], [N.bufR, 1]].forEach(([buf, ch]) => {
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.connect(N.nodes.merger, 0, ch);
+        src.start(t + 0.02, Math.random() * buf.duration);
+        srcs.push(src);
+      });
+    } catch (e) {
+      for (const x of srcs) { try { x.stop(); } catch (e2) { /* ohitetaan */ } }
+      setFootNote("Kohina ei käynnistynyt. Yritä uudelleen.", true);
+      return false;
+    }
+    N.srcs = srcs;
+    const s = { id: ++N.seq, eventId: eventId || null, s: now, wall0: now, ctx0: t, end: null, fadeAt: null, sched: null, ran: ctx.state === "running" };
+    N.session = s;
+    footNote = "";
+    clearTimeout(footTimer);
+    planSchedule(s, t, 0.0001);
+    syncScreen(true);
+    scheduleDim();
+    setTimeout(() => { if (N.session === s && !s.ran && !document.hidden) noiseFinish("failed", s.s); }, 4000);
+    render();
+    return true;
+  }
+
+  function replan() {
+    const s = N.session;
+    if (!s || !N.ctx) return;
+    const t = N.ctx.currentTime;
+    planSchedule(s, t, fadeValueAt(s, t));
+  }
+
+  function onEndTimer(s) {
+    if (N.session !== s) return;
+    audioHealth();
+    if (N.session !== s) return;
+    if (Date.now() < s.end) { N.endTimer = setTimeout(() => onEndTimer(s), s.end - Date.now() + 400); return; }
+    noiseFinish("timer", s.end);
+  }
+
+  // Jos äänen kello on jäänyt jälkeen seinäkellosta, ääni on ollut pysähdyksissä (esim. näyttö lukittui).
+  function audioHealth() {
+    const s = N.session;
+    if (!s || !N.ctx) return;
+    const ctx = N.ctx;
+    if (ctx.state === "running") s.ran = true;
+    const played = Math.max(0, ctx.currentTime - s.ctx0);
+    const lag = (Date.now() - s.wall0) / 1000 - played;
+    if (!s.ran) {
+      if (lag > 8 && !document.hidden) noiseFinish("failed", s.s);
+      return;
+    }
+    if (lag > 8) { noiseFinish("interrupted", s.wall0 + played * 1000); return; }
+    if (ctx.state !== "running" && !document.hidden) {
+      try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* seuraava tarkistus hoitaa */ }
+    }
+  }
+
+  function noiseFinish(reason, endWall) {
+    const s = N.session;
+    if (!s) return;
+    N.session = null;
+    clearTimeout(N.endTimer);
+    const srcs = N.srcs || [];
+    N.srcs = null;
+    if (N.ctx && N.nodes) {
+      const ctx = N.ctx, g = N.nodes.fade.gain, t = ctx.currentTime;
+      let wait = 0.05;
+      g.cancelScheduledValues(t);
+      if (reason === "user" || reason === "interrupted") {
+        const len = reason === "user" ? STOP_FADE : 0.4;
+        g.setValueAtTime(Math.max(fadeValueAt(s, t), 0.0001), t);
+        g.exponentialRampToValueAtTime(0.0001, t + len);
+        g.setValueAtTime(0, t + len + 0.02);
+        wait = len + 0.05;
+      } else {
+        g.setValueAtTime(0, t);   // ajastin: jo hiljaa; sivu sulkeutuu: heti hiljaa
+      }
+      for (const x of srcs) { try { x.stop(t + wait); } catch (e) { /* ohitetaan */ } }
+      N.dying = srcs;
+      setTimeout(() => {
+        if (N.dying === srcs) N.dying = null;
+        if (!N.session && N.ctx && N.ctx.state === "running") { try { const p = N.ctx.suspend(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ohitetaan */ } }
+      }, (wait + 0.3) * 1000);
+    }
+    syncScreen();
+    clearHeartbeat();
+    scheduleDim();
+    if (s.eventId) closeSegment(s.eventId, s.s, endWall, reason === "interrupted");
+    if (reason === "interrupted") setFootNote("Kohina katkesi noin klo " + fmtTime(new Date(endWall)) + ", kun näyttö lukittui tai ääni keskeytyi.", true);
+    else if (reason === "failed") setFootNote("Kohina ei käynnistynyt. Tarkista äänenvoimakkuus ja yritä uudelleen.", true);
+    render();
+  }
+  function stopNoise() { if (N.session) noiseFinish("user", Date.now()); }
+
+  function addSegment(id, s) {
+    const ev = getEvent(id);
+    if (!ev) return;
+    const segs = noiseSegs(ev).map((g) => Object.assign({}, g));
+    segs.push({ s, e: null });
+    patchEvent(id, { noise: segs });
+  }
+  function closeSegment(id, s, e, approx) {
+    const ev = getEvent(id);
+    if (!ev) return;
+    const segs = noiseSegs(ev).map((g) => Object.assign({}, g));
+    const seg = segs.find((g) => g.s === s && typeof g.e !== "number");
+    if (!seg) return;
+    seg.e = Math.max(s, Math.round(e));
+    if (approx) seg.approx = true;
+    patchEvent(id, { noise: segs });
+  }
+  // Edellinen kohina katkesi, kun sivu suljettiin: kirjataan arvioitu loppu viimeisen elonmerkin mukaan.
+  function reconcileOrphan() {
+    if (!orphan) return;
+    const o = orphan;
+    orphan = null;
+    if (!N.session) clearHeartbeat();
+    if (o.eventId) closeSegment(o.eventId, o.s, Math.min(o.last || o.s, o.end || Infinity), true);
+  }
+
+  // Näyttö pysyy päällä (Screen Wake Lock), kun kohina soi tai kun yönäkymä on auki ja asetus on päällä.
+  // Selain vapauttaa lukon aina, kun sivu menee taustalle, joten se pyydetään uudelleen sivulle palatessa.
+  const wantScreen = () => !document.hidden && (!!N.session || (prefs.screen && !$("#night").hidden));
+  function syncScreen(force) {
+    if (wantScreen()) lockScreen(force);
+    else unlockScreen();
+  }
+  async function lockScreen(force) {
+    if (N.wakeLock || N.wakePending) return;
+    if (!("wakeLock" in navigator)) {
+      if (N.wakeState !== "unsupported") { N.wakeState = "unsupported"; render(); }
+      return;
+    }
+    // Epäonnistunutta pyyntöä ei toisteta jatkuvasti: uusi yritys käyttäjän toiminnosta tai minuutin päästä.
+    if (N.wakeState === "denied" && !force && Date.now() - N.wakeTry < 60000) return;
+    N.wakePending = true;
+    N.wakeTry = Date.now();
+    let wl = null;
+    try { wl = await navigator.wakeLock.request("screen"); } catch (e) { wl = null; }
+    N.wakePending = false;
+    if (!wl) { N.wakeState = "denied"; render(); return; }
+    if (!wantScreen()) { wl.release().catch(() => {}); return; }
+    N.wakeLock = wl;
+    N.wakeState = "on";
+    wl.addEventListener("release", () => { if (N.wakeLock === wl) { N.wakeLock = null; render(); } });
+    render();
+  }
+  function unlockScreen() {
+    const wl = N.wakeLock;
+    N.wakeLock = null;
+    if (wl) { try { wl.release().catch(() => {}); } catch (e) { /* ohitetaan */ } }
+  }
+
+  // Himmennys kohinan aikana tai kun näyttö pidetään päällä.
+  const dimWanted = () => (!!N.session || prefs.screen) && !$("#night").hidden;
+  function scheduleDim() {
+    clearTimeout(dimTimer);
+    if (!dimWanted()) return;
+    dimTimer = setTimeout(() => { if (dimWanted()) document.body.classList.add("is-dim"); }, DIM_AFTER_MS);
+  }
+  // Kosketus palauttaa näkymän. Kohinan loputtua himmennys jää päälle, ettei näyttö kirkastu yöllä itsestään.
+  function wakeScreen() {
+    document.body.classList.remove("is-dim");
+    scheduleDim();
+    syncScreen();
+  }
+
+  function setFootNote(text, sticky) {
+    footNote = text;
+    clearTimeout(footTimer);
+    if (!sticky) footTimer = setTimeout(() => { footNote = ""; render(); }, 15000);
+    render();
+  }
+
+  function noiseSub(s) {
+    if (!s.end) return "soi, kunnes lopetat";
+    const endT = fmtTime(new Date(s.end));
+    return Date.now() >= s.fadeAt ? "hiljenee nyt · hiljaista klo " + endT : "hiljenee klo " + endT + " mennessä";
+  }
+  function segLabel(g, forReport) {
+    const a = fmtTime(new Date(g.s));
+    if (typeof g.e === "number") return a + "–" + (g.approx ? "n. " : "") + fmtTime(new Date(g.e));
+    if (N.session && N.session.s === g.s) return forReport ? a + " alkaen (soi yhä)" : a + "– soi nyt";
+    return a + " alkaen";
+  }
+
+  // ---------- piirto ----------
+  function render() {
+    if (queued) return;
+    queued = true;
+    queueMicrotask(() => { queued = false; draw(); });
+  }
+  function draw() {
+    const a = document.activeElement;
+    const key = a && a.dataset ? a.dataset.key : null;
+    const evs = allEvents();
+    drawNight(evs);
+    if (!$("#log").hidden) drawLog(evs);
+    if (!$("#prefs").hidden) drawPrefs();
+    $("#log-stop").hidden = !N.session;
+    if (key && (!document.activeElement || document.activeElement === document.body)) {
+      const el = document.querySelector('[data-key="' + key + '"]');
+      if (el) el.focus({ preventScroll: true });
+    }
+  }
+
+  function statusText() {
+    return S.storageOk ? "Tallessa vain tässä selaimessa" : "Selain ei tallenna: merkinnät katoavat, kun suljet sivun";
+  }
+  function statusState() {
+    return S.storageOk ? "ok" : "warn";
+  }
+
+  function chipsHTML(list, id, current, act, disabled) {
+    return list.map(([v, label]) =>
+      '<button type="button" class="chip" data-act="' + act + '" data-id="' + id + '" data-val="' + v + '" data-key="' + act + "-" + id + "-" + v + '" aria-pressed="' + (current === v) + '"' + (disabled ? " disabled" : "") + ">" + label + "</button>"
+    ).join("");
+  }
+
+  const relHour = (t) => { const d = new Date(t); return (d.getHours() + d.getMinutes() / 60 - WIN_START + 24) % 24; };
+  const clampRel = (r) => (r <= WIN_HOURS ? r : r > 18 ? 0 : WIN_HOURS);   // ennen klo 20 → alkuun, klo 8 jälkeen → loppuun
+
+  function fillStrip(container, items) {
+    container.textContent = "";
+    const strip = document.createElement("div");
+    strip.className = "strip";
+    strip.setAttribute("aria-hidden", "true");
+    const track = document.createElement("div");
+    track.className = "strip-track";
+    const labels = document.createElement("div");
+    labels.className = "strip-labels";
+    for (let h = 0; h <= WIN_HOURS; h++) {
+      const x = (h / WIN_HOURS) * 100 + "%";
+      const tk = document.createElement("span");
+      tk.className = h % 2 ? "tick" : "tick major";
+      tk.style.left = x;
+      track.appendChild(tk);
+      if (h % 2 === 0) {
+        const lb = document.createElement("span");
+        lb.className = "lbl";
+        lb.style.left = x;
+        lb.textContent = pad((WIN_START + h) % 24);
+        labels.appendChild(lb);
+      }
+    }
+    // Kohinan ajat vaaleana nauhana, heräämiset viivoina. Kellotaulun aika: toimii myös kellojen siirron yönä.
+    for (const e of items) {
+      for (const g of noiseSegs(e)) {
+        const end = typeof g.e === "number" ? g.e : (N.session && N.session.s === g.s ? Date.now() : g.s);
+        const a = clampRel(relHour(g.s)), b = clampRel(relHour(end));
+        if (b < a) continue;
+        const band = document.createElement("span");
+        band.className = "nband";
+        band.style.left = (a / WIN_HOURS) * 100 + "%";
+        band.style.width = Math.max(0.6, ((b - a) / WIN_HOURS) * 100) + "%";
+        track.appendChild(band);
+      }
+    }
+    for (const e of items) {
+      const rel = relHour(e.t);
+      if (rel > WIN_HOURS) continue;
+      const mk = document.createElement("span");
+      mk.className = "mark";
+      mk.style.left = (rel / WIN_HOURS) * 100 + "%";
+      track.appendChild(mk);
+    }
+    strip.append(track, labels);
+    container.appendChild(strip);
+  }
+
+  function drawNight(evs) {
+    const key = nightKey(Date.now());
+    const tonight = evs.filter((e) => nightKey(e.t) === key).sort((a, b) => a.t - b.t);
+    $("#tonight-text").textContent = tonight.length
+      ? (tonight.length === 1 ? "1 merkintä: " : tonight.length + " merkintää: ") + tonight.map((e) => fmtTime(new Date(e.t))).join(" · ")
+      : "Ei merkintöjä.";
+    const st = $("#status");
+    st.textContent = statusText();
+    st.dataset.state = statusState();
+    $("#log-count").textContent = evs.length ? String(evs.length) : "";
+
+    const s = N.session;
+    const latest = latestId ? evs.find((e) => e.id === latestId) : null;
+    const dur = prefs.dur > 0 ? fmtMin(prefs.dur) : "";
+
+    const zn = $("#zone-noise");
+    zn.classList.toggle("is-playing", !!s);
+    if (s) {
+      $("#zn-main").textContent = "Lopeta kohina";
+      $("#zn-sub").textContent = noiseSub(s);
+    } else if (latest) {
+      $("#zn-main").textContent = "Käynnistä kohina";
+      $("#zn-sub").textContent = "jo kirjattu klo " + fmtTime(new Date(latest.t)) + (dur ? " · soi " + dur : "");
+    } else {
+      $("#zn-main").textContent = "Heräsin + kohina";
+      $("#zn-sub").textContent = "kirjaa ja soita kohinaa" + (dur ? " · " + dur : "");
+    }
+
+    const zw = $("#zw-main");
+    if (wakeFlash) {
+      zw.textContent = fmtTime(new Date(wakeFlash.t));
+      zw.classList.add("is-time");
+      $("#zw-sub").textContent = wakeFlash.text;
+    } else {
+      zw.textContent = s ? "Heräsin uudelleen" : "Heräsin";
+      zw.classList.remove("is-time");
+      $("#zw-sub").textContent = s ? "kirjaa · kohina jatkuu" : "kirjaa kellonaika";
+    }
+
+    const screenWarn = wantScreen() && !N.wakeLock && (N.wakeState === "unsupported" || N.wakeState === "denied")
+      ? (s ? "Näyttö voi sammua, ja kohina voi silloin katketa." : "Näytön pitäminen päällä ei onnistunut, joten näyttö voi sammua.")
+      : "";
+    const warn = [footNote, screenWarn].filter(Boolean).join(" ");
+    const note = $("#foot-note");
+    note.hidden = !warn;
+    note.textContent = warn || "";
+
+    if (latest) {
+      $("#after").hidden = false;
+      $("#tonight").hidden = true;
+      $("#after-time").textContent = fmtTime(new Date(latest.t));
+      $("#after-chips").innerHTML = chipsHTML(KINDS_SHORT, latest.id, latest.kind, "kind");
+    } else {
+      $("#after").hidden = true;
+      $("#tonight").hidden = false;
+    }
+  }
+
+  function entryHTML(e) {
+    const d = new Date(e.t);
+    const id = e.id;
+    const confirming = delConfirm === id;
+    const tags =
+      (e.manual ? '<span class="tag">lisätty jälkikäteen</span>' : "") +
+      (e.timeEdited ? '<span class="tag">aika korjattu</span>' : "") +
+      noiseSegs(e).map((g) => '<span class="tag tag-noise">kohina ' + segLabel(g, false) + "</span>").join("") +
+      (e.duringNoise ? '<span class="tag tag-noise">kohina jo päällä</span>' : "");
+    return '<article class="entry">' +
+      '<div class="entry-top">' +
+        '<label class="sr" for="t-' + id + '">Kellonaika, ' + fmtWDM(d) + "</label>" +
+        '<input class="t-edit" id="t-' + id + '" type="time" value="' + pad(d.getHours()) + ":" + pad(d.getMinutes()) + '" data-id="' + id + '">' +
+        '<span class="entry-day">' + fmtWDM(d) + "</span>" +
+        '<button type="button" class="textbtn del' + (confirming ? " is-confirm" : "") + '" data-act="del" data-id="' + id + '" data-key="del-' + id + '">' + (confirming ? "Vahvista poisto" : "Poista") + "</button>" +
+      "</div>" +
+      (tags ? '<div class="tags">' + tags + "</div>" : "") +
+      '<div class="field"><span class="field-label" id="kl-' + id + '">Ääni</span><div class="chips" role="group" aria-labelledby="kl-' + id + '">' + chipsHTML(KINDS, id, e.kind, "kind") + "</div></div>" +
+      '<div class="field"><span class="field-label" id="al-' + id + '">Valvoin</span><div class="chips" role="group" aria-labelledby="al-' + id + '">' + chipsHTML(AWAKES, id, e.awake, "awake") + "</div></div>" +
+      '<label class="sr" for="n-' + id + '">Muistiinpano</label>' +
+      '<input class="note" id="n-' + id + '" type="text" maxlength="300" autocomplete="off" placeholder="Muistiinpano, esim. huutoa noin 10 min" value="' + esc(e.note || "") + '" data-id="' + id + '">' +
+    "</article>";
+  }
+
+  function groupByNight(evs) {
+    const groups = new Map();
+    for (const e of evs) {
+      const k = nightKey(e.t);
+      if (!groups.has(k)) groups.set(k, { key: k, start: nightStart(e.t), items: [] });
+      groups.get(k).items.push(e);
+    }
+    return [...groups.values()];
+  }
+
+  function drawLog(evs) {
+    const groups = groupByNight(evs);   // uusin yö ensin
+    if (evs.length) {
+      const first = nightStart(evs[evs.length - 1].t);
+      const lastEnd = addDays(nightStart(evs[0].t), 1);
+      $("#log-summary").textContent = countWake(evs.length) + " " + groups.length + " yönä, " + fmtDM(first) + "–" + fmtDM(lastEnd);
+    } else {
+      $("#log-summary").textContent = "Ei vielä merkintöjä.";
+    }
+    $("#log-empty").hidden = evs.length > 0;
+    $("#btn-copy").disabled = !evs.length;
+    $("#btn-download").disabled = !evs.length;
+    const rep = $("#report");
+    if (document.activeElement !== rep) rep.value = buildReport(evs);
+
+    const list = $("#log-list");
+    const a = document.activeElement;
+    if (a && list.contains(a) && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) { listDirty = true; return; }
+    listDirty = false;
+    let html = "";
+    for (const g of groups) {
+      g.items.sort((x, y) => x.t - y.t);
+      html += '<section class="ngroup" aria-label="Yö ' + nightLabel(g.start) + '">' +
+        '<div class="ngroup-head"><h2 class="ngroup-title">' + nightLabel(g.start) + '</h2><span class="ngroup-count">' + countWake(g.items.length) + "</span></div>" +
+        '<div class="strip-slot" data-night="' + g.key + '"></div>' +
+        g.items.map(entryHTML).join("") +
+      "</section>";
+    }
+    list.innerHTML = html;
+    for (const g of groups) {
+      const slot = list.querySelector('.strip-slot[data-night="' + g.key + '"]');
+      if (slot) fillStrip(slot, g.items);
+    }
+  }
+
+  function fadeHelp() {
+    if (prefs.dur <= 0) return "Ilman ajastinta kohina soi, kunnes lopetat sen. Lopettaessa se hiljenee parissa sekunnissa.";
+    const eff = Math.max(0.05, Math.min(prefs.fade, prefs.dur / 2));
+    return "Kohina soi täysillä " + fmtMin(prefs.dur - eff) + " ja hiljenee sitten " + numFi(eff) + " minuutissa kokonaan." +
+      (eff < prefs.fade ? " Hiljeneminen on enintään puolet kestosta." : "");
+  }
+  function drawPrefs() {
+    $("#p-dur").innerHTML = chipsHTML(DURS, "p", prefs.dur, "p-dur");
+    $("#p-fade").innerHTML = chipsHTML(FADES, "p", prefs.fade, "p-fade", prefs.dur <= 0);
+    $("#p-fade-help").textContent = fadeHelp();
+    const vol = $("#p-vol"), tone = $("#p-tone");
+    if (document.activeElement !== vol) vol.value = String(prefs.vol);
+    if (document.activeElement !== tone) tone.value = String(prefs.tone);
+    vol.style.setProperty("--p", vol.value + "%");
+    tone.style.setProperty("--p", tone.value + "%");
+    $("#p-vol-out").textContent = prefs.vol + " %";
+    const s = N.session;
+    $("#p-listen").textContent = s ? "Lopeta kohina" : "Kuuntele kohinaa";
+    const now = $("#p-now");
+    now.hidden = !s;
+    now.textContent = s ? "Kohina soi: " + noiseSub(s) + "." : "";
+    $("#p-screen").innerHTML = chipsHTML(SCREENS, "p", prefs.screen ? 1 : 0, "p-screen");
+    $("#p-screen-help").textContent = prefs.screen
+      ? "Kun yönäkymä on auki, puhelin ei sammuta näyttöä. Näyttö himmenee 20 sekunnissa lähes mustaksi, ja voit kirjata heräämisen avaamatta puhelimen lukitusta. Ilman laturia akkua kuluu yön aikana, joten katso ensimmäisenä aamuna, paljonko."
+      : "Näyttö pysyy päällä vain kohinan soidessa. Muuten puhelin sammuttaa näytön tavalliseen tapaan.";
+    const stText = N.wakeState === "on" ? "Tila: toimii tällä laitteella."
+      : N.wakeState === "denied" ? "Tila: viimeisin yritys ei onnistunut, koska selain ei sallinut näytön pitämistä päällä. Käytä silloin näytön päällä pitävää sovellusta, kuten Caffeinea."
+      : N.wakeState === "unsupported" ? "Tila: tämä selain ei osaa pitää näyttöä päällä."
+      : "";
+    const st = $("#p-screen-state");
+    st.hidden = !stText;
+    st.textContent = stText;
+  }
+
+  // ---------- raportti ----------
+  function buildReport(evs) {
+    if (!evs.length) return "Lokissa ei ole merkintöjä.";
+    const groups = groupByNight(evs.slice().sort((a, b) => a.t - b.t));   // vanhin ensin
+    const first = groups[0].start;
+    const lastEnd = addDays(groups[groups.length - 1].start, 1);
+    const lines = [
+      "Häiriöloki: heräämiset ääniin",
+      "Ajalta " + fmtDM(first) + (first.getFullYear() !== lastEnd.getFullYear() ? first.getFullYear() : "") + "–" + fmtDM(lastEnd) + lastEnd.getFullYear() +
+        ": " + countWake(evs.length) + " " + groups.length + " yönä.",
+      ""
+    ];
+    let anyLate = false, anyNoise = false;
+    for (const g of groups) {
+      lines.push("Yö " + nightLabel(g.start));
+      for (const e of g.items) {
+        const d = new Date(e.t);
+        const parts = [KIND_TXT[e.kind] || "heräsin ääneen"];
+        if (AWAKE_TXT[e.awake]) parts.push(AWAKE_TXT[e.awake]);
+        const segs = noiseSegs(e);
+        if (segs.length) { parts.push("kohina päällä " + segs.map((x) => segLabel(x, true)).join(" ja ")); anyNoise = true; }
+        if (e.duringNoise) { parts.push("kohina oli jo päällä"); anyNoise = true; }
+        if (e.note && e.note.trim()) parts.push(e.note.trim());
+        if (e.manual) { parts.push("kirjattu jälkikäteen"); anyLate = true; }
+        else if (e.timeEdited) { parts.push("kellonaikaa korjattu jälkikäteen"); anyLate = true; }
+        lines.push("• " + fmtWDM(d) + " klo " + fmtTime(d) + " – " + parts.join(", "));
+      }
+      lines.push("");
+    }
+    lines.push(anyLate
+      ? "Kellonajat on kirjattu heräämisen hetkellä, paitsi jälkikäteen kirjatuiksi merkityt."
+      : "Kellonajat on kirjattu heräämisen hetkellä.");
+    if (anyNoise) lines.push("Kohinalla tarkoitetaan valkoista kohinaa, jota soitin peittämään ääniä.");
+    return lines.join("\n");
+  }
+
+  // ---------- toiminnot ----------
+  function announce(text) {
+    const sr = $("#sr");
+    sr.textContent = "";
+    setTimeout(() => { sr.textContent = text; }, 30);
+  }
+  function logMsg(text) {
+    const el = $("#log-msg");
+    el.textContent = text;
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => { el.textContent = ""; }, 7000);
+  }
+  function buzz() { try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) { /* ei värinää */ } }
+  function pulse(sel) {
+    const b = $(sel);
+    b.classList.remove("pulse");
+    void b.offsetWidth;
+    b.classList.add("pulse");
+  }
+  function tapOk() {
+    const now = Date.now();
+    if (now - lastTap < TAP_GUARD_MS) return false;
+    lastTap = now;
+    return true;
+  }
+  function markLogged(id, now, text) {
+    latestId = id;
+    announce(text || "Kirjattu kello " + fmtTime(new Date(now)));
+    clearTimeout(afterTimer);
+    afterTimer = setTimeout(() => { latestId = null; render(); }, RECENT_MS);
+  }
+  function flashWake(t, text) {
+    wakeFlash = { t, text };
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { wakeFlash = null; render(); }, 6000);
+    pulse("#zone-wake");
+    render();
+  }
+
+  // Yläalue: kirjaa ja käynnistää kohinan; kohinan soidessa lopettaa sen.
+  function onZoneNoise() {
+    if (!tapOk()) return;
+    if (N.session) {
+      stopNoise();
+      announce("Kohina hiljenee");
+      buzz();
+      return;
+    }
+    const now = Date.now();
+    const recent = latestId && getEvent(latestId) ? latestId : null;
+    if (recent) {
+      // Juuri kirjattu herääminen: kohina liitetään siihen, ei tuplamerkintää.
+      if (noiseStart(recent, now)) { addSegment(recent, now); announce("Kohina käynnistyi"); }
+    } else {
+      const id = newId(now);
+      const ok = noiseStart(id, now);
+      const ev = baseEvent(now);
+      if (ok) ev.noise = [{ s: now, e: null }];
+      putEvent(id, ev);
+      markLogged(id, now, "Kirjattu kello " + fmtTime(new Date(now)) + (ok ? ". Kohina käynnistyi." : ""));
+    }
+    buzz();
+    pulse("#zone-noise");
+  }
+
+  // Alaalue: kirjaa heräämisen. Kohinan soidessa kohina jatkuu ja sen ajastin alkaa alusta.
+  function onZoneWake() {
+    if (!tapOk()) return;
+    const now = Date.now();
+    const recent = latestId ? getEvent(latestId) : null;
+    if (recent) {
+      flashWake(recent.t, "jo kirjattu");
+      if (N.session) replan();
+      announce("Jo kirjattu kello " + fmtTime(new Date(recent.t)));
+      buzz();
+      return;
+    }
+    const id = newId(now);
+    const ev = baseEvent(now);
+    if (N.session) ev.duringNoise = true;
+    putEvent(id, ev);
+    markLogged(id, now);
+    flashWake(now, N.session ? "kirjattu · kohina jatkuu" : "kirjattu");
+    if (N.session) replan();
+    buzz();
+  }
+
+  function onUndo() {
+    if (!latestId) return;
+    const id = latestId;
+    latestId = null;
+    clearTimeout(flashTimer);
+    wakeFlash = null;
+    if (N.session && N.session.eventId === id) { N.session.eventId = null; writeHeartbeat(); }
+    putEvent(id, null);
+    announce(N.session ? "Merkintä peruttu. Kohina jatkuu." : "Merkintä peruttu");
+  }
+
+  function onListen() {
+    if (N.session) stopNoise();
+    else noiseStart(null, Date.now());
+    render();
+  }
+  function setPref(k, v) {
+    if (prefs[k] === v) return;
+    prefs[k] = v;
+    savePrefs();
+    if (N.session && (k === "dur" || k === "fade")) replan();
+    if (k === "screen") { syncScreen(true); scheduleDim(); }
+    render();
+  }
+
+  function toggleField(id, field, val) {
+    const e = getEvent(id);
+    if (!e) return;
+    const empty = field === "awake" ? null : "";
+    patchEvent(id, { [field]: e[field] === val ? empty : val });
+  }
+  function commitNote(id, value) {
+    const v = String(value || "").slice(0, 300);
+    const e = getEvent(id);
+    if (!e || (e.note || "") === v) return;
+    patchEvent(id, { note: v });
+  }
+  function commitTime(id, value) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(value || "");
+    const e = getEvent(id);
+    if (!m || !e) return;
+    const h = +m[1], mi = +m[2];
+    const s = nightStart(e.t);   // aika pysyy samassa yössä
+    const t = new Date(s.getFullYear(), s.getMonth(), s.getDate() + (h < 12 ? 1 : 0), h, mi).getTime();
+    if (t === e.t) return;
+    patchEvent(id, { t, timeEdited: true });
+  }
+  function onDelete(id) {
+    if (delConfirm === id) {
+      clearTimeout(delTimer);
+      delConfirm = null;
+      if (latestId === id) latestId = null;
+      putEvent(id, null);
+      logMsg("Merkintä poistettu.");
+      return;
+    }
+    delConfirm = id;
+    clearTimeout(delTimer);
+    delTimer = setTimeout(() => { delConfirm = null; render(); }, 4000);
+    render();
+  }
+
+  function drawAddChips() {
+    const a = document.activeElement;
+    const key = a && a.dataset ? a.dataset.key : null;
+    $("#add-kinds").innerHTML = chipsHTML(KINDS, "new", addState.kind, "add-kind");
+    $("#add-awakes").innerHTML = chipsHTML(AWAKES, "new", addState.awake, "add-awake");
+    if (key) { const el = document.querySelector('[data-key="' + key + '"]'); if (el) el.focus({ preventScroll: true }); }
+  }
+  function openAdd() {
+    const now = new Date();
+    const when = $("#add-when");
+    when.value = toLocalInput(now);
+    when.max = toLocalInput(now);
+    $("#add-note").value = "";
+    $("#add-msg").textContent = "";
+    addState.kind = "";
+    addState.awake = null;
+    drawAddChips();
+    $("#add").hidden = false;
+    when.focus();
+  }
+  function closeAdd() {
+    $("#add").hidden = true;
+    $("#btn-add").focus({ preventScroll: true });
+  }
+  function saveAdd() {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec($("#add-when").value || "");
+    if (!m) { $("#add-msg").textContent = "Valitse päivä ja kellonaika."; return; }
+    const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+    if (t > Date.now() + 60000) { $("#add-msg").textContent = "Ajankohta on tulevaisuudessa. Valitse mennyt hetki."; return; }
+    const now = Date.now();
+    putEvent(newId(t), { t, kind: addState.kind, awake: addState.awake, note: $("#add-note").value.trim().slice(0, 300), manual: true, timeEdited: false, created: now, updated: now, v: 1 });
+    closeAdd();
+    const d = new Date(t);
+    logMsg("Lisätty: " + fmtWDM(d) + " klo " + fmtTime(d) + ".");
+  }
+
+  function onCopy() {
+    const text = buildReport(allEvents());
+    const box = $("#report");
+    box.value = text;
+    const fallback = () => {
+      $("#report-box").open = true;
+      box.focus();
+      box.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      logMsg(ok ? "Raportti kopioitu. Liitä se sähköpostiin." : "Kopiointi ei onnistunut tässä näkymässä. Teksti on valittuna alla: kopioi se itse.");
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => logMsg("Raportti kopioitu. Liitä se sähköpostiin."), fallback);
+      } else fallback();
+    } catch (e) { fallback(); }
+  }
+  // Raportti ladataan tekstitiedostona suoraan selaimesta, ilman palvelinta.
+  function onDownload() {
+    const name = "hairioloki-" + dayKey(new Date()) + ".txt";
+    try {
+      const blob = new Blob([buildReport(allEvents())], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.hidden = true;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      logMsg("Raportti ladataan tiedostona: " + name);
+    } catch (e) {
+      logMsg("Tiedoston tallennus ei onnistunut tässä selaimessa. Käytä Kopioi raportti -nappia.");
+    }
+  }
+
+  function showView(v) {
+    $("#night").hidden = v !== "night";
+    $("#log").hidden = v !== "log";
+    $("#prefs").hidden = v !== "prefs";
+    document.body.classList.remove("is-dim");
+    window.scrollTo(0, 0);
+    draw();
+    (v === "log" ? $("#log-title") : v === "prefs" ? $("#prefs-title") : $("#zone-wake")).focus({ preventScroll: true });
+    syncScreen(true);
+    scheduleDim();
+  }
+
+  // ---------- tapahtumat ----------
+  document.addEventListener("click", (ev) => {
+    const el = ev.target.closest("[data-act]");
+    if (!el || el.disabled) return;
+    const id = el.dataset.id, val = el.dataset.val;
+    switch (el.dataset.act) {
+      case "zone-noise": onZoneNoise(); break;
+      case "zone-wake": onZoneWake(); break;
+      case "undo": onUndo(); break;
+      case "kind": toggleField(id, "kind", val); break;
+      case "awake": toggleField(id, "awake", Number(val)); break;
+      case "del": onDelete(id); break;
+      case "open-log": showView("log"); break;
+      case "open-prefs": showView("prefs"); break;
+      case "close-view": showView("night"); break;
+      case "noise-stop": stopNoise(); break;
+      case "listen": onListen(); break;
+      case "p-dur": setPref("dur", Number(val)); break;
+      case "p-fade": setPref("fade", Number(val)); break;
+      case "p-screen": setPref("screen", val === "1"); break;
+      case "add-open": openAdd(); break;
+      case "add-cancel": closeAdd(); break;
+      case "add-kind": addState.kind = addState.kind === val ? "" : val; drawAddChips(); break;
+      case "add-awake": { const n = Number(val); addState.awake = addState.awake === n ? null : n; drawAddChips(); break; }
+      case "copy": onCopy(); break;
+      case "download": onDownload(); break;
+    }
+  });
+  document.addEventListener("input", (ev) => {
+    const el = ev.target;
+    if (el.id === "p-vol" || el.id === "p-tone") {
+      el.style.setProperty("--p", el.value + "%");
+      if (el.id === "p-vol") {
+        prefs.vol = Number(el.value);
+        $("#p-vol-out").textContent = prefs.vol + " %";
+        applyVolume();
+      } else {
+        prefs.tone = Number(el.value);
+        applyTone();
+      }
+      savePrefs();
+      return;
+    }
+    if (!el.classList || !el.classList.contains("note")) return;
+    const id = el.dataset.id;
+    clearTimeout(noteTimers.get(id));
+    noteTimers.set(id, setTimeout(() => commitNote(id, el.value), 900));
+  });
+  document.addEventListener("change", (ev) => {
+    const el = ev.target;
+    if (!el.classList) return;
+    if (el.classList.contains("note")) { clearTimeout(noteTimers.get(el.dataset.id)); commitNote(el.dataset.id, el.value); }
+    else if (el.classList.contains("t-edit")) commitTime(el.dataset.id, el.value);
+  });
+  document.addEventListener("focusout", () => { setTimeout(() => { if (listDirty) render(); }, 0); });
+  document.addEventListener("pointerdown", wakeScreen, true);
+  document.addEventListener("keydown", wakeScreen, true);
+  $("#add").addEventListener("submit", (ev) => { ev.preventDefault(); saveAdd(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    tick();
+    if (N.session) audioHealth();
+    document.body.classList.remove("is-dim");
+    syncScreen(true);
+    scheduleDim();
+    render();
+  });
+  // Sivun sulkeutuessa kohina loppuu: kirjataan loppuaika heti.
+  window.addEventListener("pagehide", () => { if (N.session) noiseFinish("closed", Date.now()); });
+
+  function tick() {
+    const d = new Date();
+    $("#clock-time").textContent = fmtTime(d);
+    $("#clock-date").textContent = fmtWDM(d);
+    const k = nightKey(d.getTime());
+    if (k !== lastNight) { lastNight = k; render(); }
+    if (wantScreen() && !N.wakeLock) syncScreen();   // esim. virransäästö vapautti lukon
+    if (N.session) {
+      audioHealth();
+      const s = N.session;
+      if (s) {
+        writeHeartbeat();
+        if (s.end && Date.now() > s.end + 3000) noiseFinish("timer", s.end);
+      }
+      render();
+    }
+  }
+
+  tick();
+  setInterval(tick, 10000);
+  draw();
+  syncScreen(true);
+  scheduleDim();
+  reconcileOrphan();
+})();
+</script>
+</body>
+</html>
