@@ -9,8 +9,8 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#050303">
-<meta name="description" content="Yösovellus heräämisten kirjaamiseen ja valkoiseen kohinaan. Merkinnät pysyvät vain omassa selaimessa.">
-<title>Yön häiriöloki</title>
+<meta name="description" content="Yöloki kirjaa yölliset heräämiset yhdellä napautuksella ja soittaa tarvittaessa valkoista kohinaa. Merkinnät pysyvät vain omassa selaimessa.">
+<title>Yöloki</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050303'/%3E%3Cpath d='M12 26c6.7-8 13.3-8 20 0s13.3 8 20 0M12 40c6.7-8 13.3-8 20 0s13.3 8 20 0' fill='none' stroke='%23d9826a' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* Layout: yhden ruudun yöinstrumentti – ylärivi (kello, kohinan asetukset, loki), kaksi koko leveyden kosketusaluetta (ylhäällä kirjaus + kohina, alhaalla pelkkä kirjaus) ja alarivi viimeisimmälle merkinnälle; loki ja asetukset ovat erillisiä, vieritettäviä näkymiä. */
@@ -77,18 +77,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .pill.solid { background: var(--ember); border-color: var(--glow-dim); }
 .pill-count { font-family: var(--font-num); color: var(--glow-dim); font-variant-numeric: tabular-nums; }
 .pill-count:empty { display: none; }
-.iconbtn {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--edge);
-  border-radius: 8px;
-  color: var(--glow-dim);
-}
-.iconbtn:active { background: var(--surface); }
-.iconbtn svg { width: 22px; height: 22px; }
+.pill svg { flex: none; width: 18px; height: 18px; color: var(--glow-dim); }
 .textbtn {
   min-height: 40px;
   padding-inline: 6px;
@@ -144,10 +133,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
 
 .bar { flex: none; display: flex; align-items: center; gap: 10px; padding-top: 10px; }
-.clock { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
-.clock-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+.clock { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
 .clock-time { font: 400 1.75rem/1 var(--font-num); letter-spacing: .01em; color: var(--glow-dim); font-variant-numeric: tabular-nums; }
-.clock-date, .clock-status { font-size: .8125rem; line-height: 1.35; color: var(--glow-dim); font-variant-numeric: tabular-nums; }
+.clock-date { font-size: .8125rem; line-height: 1.35; color: var(--glow-dim); font-variant-numeric: tabular-nums; }
 #status[data-state="warn"] { color: var(--amber); }
 
 .zone {
@@ -216,6 +204,8 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
 .after-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .after-row .textbtn { margin-left: auto; }
 .tonight { display: grid; gap: 4px; }
+.tonight-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.status { font-size: .8125rem; line-height: 1.35; color: var(--glow-dim); }
 .tonight-text { margin: 0; font-variant-numeric: tabular-nums; }
 
 /* ---------- loki- ja asetusnäkymä ---------- */
@@ -310,7 +300,40 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
   resize: vertical;
 }
 
-.pgroup { margin-top: 26px; display: grid; gap: 10px; }
+/* Asetukset kortteina */
+.card {
+  margin-top: 16px;
+  padding: 18px 16px;
+  display: grid;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.page-head + .card { margin-top: 20px; }
+.card-title { margin: 0; font: 700 1.125rem/1.3 var(--font-body); color: var(--glow); }
+.field-block { display: grid; gap: 8px; margin-top: 6px; }
+.listen-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.listen {
+  min-height: 52px;
+  padding: 0 22px 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--glow-dim);
+  border-radius: 26px;
+  background: var(--ember);
+  color: var(--glow);
+  font-weight: 700;
+}
+.listen:active { transform: scale(.98); }
+.listen.is-on { box-shadow: inset 0 0 0 2px var(--glow-dim); }
+.listen-icon { flex: none; width: 20px; height: 20px; fill: currentColor; }
+.envelope { margin: 4px 0 0; display: grid; gap: 8px; }
+.env-svg { display: block; width: 100%; height: 64px; border-bottom: 1px solid var(--edge); }
+.env-fill { fill: var(--line); fill: color-mix(in srgb, var(--glow-dim) 22%, transparent); }
+.env-line { fill: none; stroke: var(--glow); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.env-cap { font-size: .9375rem; color: var(--glow-dim); font-variant-numeric: tabular-nums; }
 .help { margin: 0; max-width: 34rem; font-size: .9375rem; color: var(--glow-dim); }
 .now { margin: 0; font-variant-numeric: tabular-nums; }
 .range-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -336,19 +359,20 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
 </style>
 </head>
 <body>
-<noscript><p style="padding:16px">Yön häiriöloki tarvitsee JavaScriptin.</p></noscript>
+<noscript><p style="padding:16px">Yöloki tarvitsee JavaScriptin.</p></noscript>
 
 <div id="sr" class="sr" aria-live="polite"></div>
 
 <main id="night" class="night">
-  <h1 class="sr">Yön häiriöloki</h1>
+  <h1 class="sr">Yöloki</h1>
   <header class="bar">
     <div class="clock">
-      <div class="clock-row"><span id="clock-time" class="clock-time">–.––</span><span id="clock-date" class="clock-date"></span></div>
-      <div id="status" class="clock-status" data-state="ok">Tallessa vain tässä selaimessa</div>
+      <span id="clock-time" class="clock-time">–.––</span>
+      <span id="clock-date" class="clock-date"></span>
     </div>
-    <button type="button" class="iconbtn" data-act="open-prefs" data-key="open-prefs" aria-label="Asetukset">
+    <button type="button" class="pill" data-act="open-prefs" data-key="open-prefs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h3M13 17h7"/><circle cx="16" cy="7" r="2.5"/><circle cx="10" cy="17" r="2.5"/></svg>
+      Asetukset
     </button>
     <button type="button" class="pill" data-act="open-log" data-key="open-log">Loki <span id="log-count" class="pill-count"></span></button>
   </header>
@@ -375,7 +399,7 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
       </div>
     </section>
     <section id="tonight" class="tonight" aria-labelledby="tonight-h">
-      <h2 id="tonight-h" class="eyebrow">Tänä yönä</h2>
+      <div class="tonight-head"><h2 id="tonight-h" class="eyebrow">Tänä yönä</h2><span id="status" class="status" data-state="ok">Tallessa vain tässä selaimessa</span></div>
       <p id="tonight-text" class="tonight-text">Ei merkintöjä.</p>
     </section>
   </div>
@@ -431,56 +455,76 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     <h1 id="prefs-title" class="page-title" tabindex="-1">Asetukset</h1>
   </header>
 
-  <section class="pgroup" aria-labelledby="p-dur-l">
-    <h2 id="p-dur-l" class="field-label">Kesto</h2>
-    <p class="help">Kun käynnistät kohinan yläosan alueesta.</p>
-    <div id="p-dur" class="chips" role="group" aria-labelledby="p-dur-l"></div>
-  </section>
-
-  <section class="pgroup" aria-labelledby="p-fade-l">
-    <h2 id="p-fade-l" class="field-label">Hiljeneminen lopussa</h2>
-    <div id="p-fade" class="chips" role="group" aria-labelledby="p-fade-l"></div>
-    <p id="p-fade-help" class="help"></p>
-  </section>
-
-  <section class="pgroup" aria-labelledby="p-sound-l">
-    <h2 id="p-sound-l" class="field-label">Ääni</h2>
-    <div><button type="button" id="p-listen" class="pill solid" data-act="listen" data-key="listen">Kuuntele kohinaa</button></div>
+  <section class="card" aria-labelledby="c-noise">
+    <h2 id="c-noise" class="card-title">Kohina</h2>
+    <p class="help">Valkoinen kohina syntyy sovelluksessa itse. Se soi saumattomasti ja peittää yöllisiä ääniä.</p>
+    <div class="listen-row">
+      <button type="button" id="p-listen" class="listen" data-act="listen" data-key="listen" aria-describedby="p-listen-help">
+        <svg class="listen-icon" viewBox="0 0 24 24" aria-hidden="true"><path id="p-listen-glyph" d="M8 5v14l11-7z"/></svg>
+        <span id="p-listen-text">Kuuntele kohinaa</span>
+      </button>
+      <button type="button" id="p-untimed" class="pill" data-act="untimed" data-key="untimed" hidden>Jatka ilman ajastinta</button>
+    </div>
     <p id="p-now" class="now" hidden></p>
-    <p class="help">Kuuntelu ei kirjaa heräämistä. Säädä voimakkuus ja sävy kuunnellessasi. Kohina jatkuu yönäkymässä ja loppuu ajastimen mukaan.</p>
+    <p id="p-listen-help" class="help">Kuuntelu soi, kunnes lopetat sen, eikä se kirjaa heräämistä. Säädä samalla voimakkuus ja sävy.</p>
+
+    <div class="field-block">
+      <div class="range-head"><label class="field-label" for="p-vol">Voimakkuus</label><output id="p-vol-out" class="range-out" for="p-vol"></output></div>
+      <input id="p-vol" class="range" type="range" min="0" max="100" step="1">
+    </div>
+
+    <div class="field-block">
+      <label class="field-label" for="p-tone">Sävy</label>
+      <input id="p-tone" class="range" type="range" min="0" max="100" step="1" aria-describedby="p-tone-help">
+      <div class="range-ends" aria-hidden="true"><span>Kirkas</span><span>Pehmeä</span></div>
+      <p id="p-tone-help" class="help">Pehmeämpi sävy vaimentaa korkeinta sihinää. Vasen reuna on puhdas valkoinen kohina.</p>
+    </div>
   </section>
 
-  <section class="pgroup">
-    <div class="range-head"><label class="field-label" for="p-vol">Voimakkuus</label><output id="p-vol-out" class="range-out" for="p-vol"></output></div>
-    <input id="p-vol" class="range" type="range" min="0" max="100" step="1">
+  <section class="card" aria-labelledby="c-timer">
+    <h2 id="c-timer" class="card-title">Ajastin</h2>
+    <p class="help">Kun käynnistät kohinan yönäkymän yläosasta, se soi valitun ajan ja hiljenee lopuksi tasaisesti, ettei äkillinen hiljaisuus herätä.</p>
+
+    <div class="field-block">
+      <h3 id="p-dur-l" class="field-label">Kesto</h3>
+      <div id="p-dur" class="chips" role="group" aria-labelledby="p-dur-l"></div>
+    </div>
+
+    <div class="field-block">
+      <h3 id="p-fade-l" class="field-label">Hiljeneminen</h3>
+      <div id="p-fade" class="chips" role="group" aria-labelledby="p-fade-l"></div>
+    </div>
+
+    <figure class="envelope">
+      <svg class="env-svg" viewBox="0 0 320 64" preserveAspectRatio="none" aria-hidden="true">
+        <path id="env-fill" class="env-fill" d="M0 64"/>
+        <path id="env-line" class="env-line" d="M0 64"/>
+      </svg>
+      <figcaption id="env-cap" class="env-cap"></figcaption>
+    </figure>
   </section>
 
-  <section class="pgroup">
-    <label class="field-label" for="p-tone">Sävy</label>
-    <input id="p-tone" class="range" type="range" min="0" max="100" step="1" aria-describedby="p-tone-help">
-    <div class="range-ends" aria-hidden="true"><span>Kirkas</span><span>Pehmeä</span></div>
-    <p id="p-tone-help" class="help">Pehmeämpi sävy vaimentaa korkeinta sihinää. Vasen reuna on puhdas valkoinen kohina.</p>
-  </section>
-
-  <section class="pgroup" aria-labelledby="p-screen-l">
-    <h2 id="p-screen-l" class="field-label">Näyttö</h2>
-    <div id="p-screen" class="chips" role="group" aria-labelledby="p-screen-l"></div>
+  <section class="card" aria-labelledby="c-screen">
+    <h2 id="c-screen" class="card-title">Näyttö</h2>
+    <div id="p-screen" class="chips" role="group" aria-labelledby="c-screen"></div>
     <p id="p-screen-help" class="help"></p>
     <p id="p-screen-state" class="now" hidden></p>
   </section>
 
-  <section class="pgroup" aria-labelledby="p-tips-l">
-    <h2 id="p-tips-l" class="field-label">Yöllä</h2>
+  <section class="card" aria-labelledby="c-night">
+    <h2 id="c-night" class="card-title">Yöllä</h2>
     <ul class="tips">
       <li>Jätä tämä sivu auki yönäkymään. Laturi ei ole pakollinen, mutta ilman sitä akkua kuluu yön aikana.</li>
       <li>Näyttö himmenee 20 sekunnissa lähes mustaksi. Kosketus palauttaa näkymän.</li>
+      <li>Jos kohina loppuu liian aikaisin, napauta yläosaa uudelleen. Kolmen minuutin sisällä se ei tee uutta merkintää.</li>
       <li>Jos näyttö silti lukittuu, kohina voi katketa, ja lokiin tallentuu arvio katkeamisajasta.</li>
       <li>Pidä voimakkuus maltillisena, etenkin jos kohina soi tunteja.</li>
     </ul>
   </section>
 
-  <section class="pgroup" aria-labelledby="p-data-l">
-    <h2 id="p-data-l" class="field-label">Tiedot</h2>
+  <section class="card" aria-labelledby="c-about">
+    <h2 id="c-about" class="card-title">Tietoa sovelluksesta</h2>
+    <p class="help">Yöloki kirjaa yölliset heräämiset yhdellä napautuksella ja koostaa niistä raportin, jonka voi lähettää eteenpäin. Valkoinen kohina auttaa nukahtamaan uudelleen.</p>
     <p class="help">Merkinnät ja asetukset tallentuvat vain tämän selaimen muistiin tällä laitteella. Sivu ei lähetä tietoja mihinkään.</p>
     <p class="help">Merkinnät eivät siirry toiseen selaimeen tai puhelimeen, ja ne poistuvat, jos tyhjennät selaimen tiedot. Tallenna raportti tiedostoksi, jos haluat säilyttää sen.</p>
   </section>
@@ -492,18 +536,22 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
 
   const $ = (s) => document.querySelector(s);
   const WD = ["su", "ma", "ti", "ke", "to", "pe", "la"];
-  const KINDS = [["huuto", "Huuto, ääntely"], ["kolina", "Kolina, askeleet"], ["muu", "Muu ääni"]];
-  const KINDS_SHORT = [["huuto", "Huuto"], ["kolina", "Kolina"], ["muu", "Muu"]];   // yöllä lyhyet
+  const KINDS = [["huuto", "Puhe, huuto"], ["kolina", "Kolina, askeleet"], ["muu", "Muu ääni"]];
+  const KINDS_SHORT = [["huuto", "Puhe, huuto"], ["kolina", "Kolina"], ["muu", "Muu"]];   // yöllä lyhyet
   const AWAKES = [[15, "alle 15 min"], [30, "½ h"], [60, "1 h"], [120, "2 h"], [180, "3 h+"]];
-  const DURS = [[5, "5 min"], [15, "15 min"], [30, "30 min"], [60, "1 h"], [120, "2 h"], [300, "5 h"], [0, "Ei ajastinta"]];
-  const FADES = [[1, "1 min"], [5, "5 min"], [10, "10 min"], [20, "20 min"]];
+  // Kohinan kesto minuutteina (0 = ei ajastinta).
+  const DURS = [[0.25, "15 s"], [0.5, "30 s"], [1, "1 min"], [5, "5 min"], [15, "15 min"], [30, "30 min"], [60, "1 h"], [120, "2 h"], [300, "5 h"], [0, "Ei ajastinta"]];
+  // Hiljeneminen lopussa: osuus kestosta ja enimmäispituus sekunteina. Skaalautuu 15 sekunnista 5 tuntiin.
+  const FADES = [["fast", "Nopea"], ["calm", "Rauhallinen"], ["slow", "Hidas"]];
+  const FADE_RULES = { fast: [0.15, 120], calm: [1 / 3, 600], slow: [0.5, 1800] };
   const SCREENS = [[1, "Päällä yönäkymässä"], [0, "Vain kohinan aikana"]];
-  const KIND_TXT = { huuto: "huuto tai ääntely", kolina: "kolina tai askeleet", muu: "muu ääni" };
+  const KIND_TXT = { huuto: "puhe tai huuto", kolina: "kolina tai askeleet", muu: "muu ääni" };
   const AWAKE_TXT = { 15: "valvoin alle 15 min", 30: "valvoin noin puoli tuntia", 60: "valvoin noin tunnin", 120: "valvoin noin 2 tuntia", 180: "valvoin yli 3 tuntia" };
+  // Tallennusavaimissa on sovelluksen aiempi nimi, jotta jo tallennetut merkinnät ja asetukset säilyvät.
   const EVENTS_KEY = "hairioloki.events.v1";
   const PREFS_KEY = "hairioloki.prefs.v1";
   const NOISE_KEY = "hairioloki.noise.v1";
-  const DEFAULT_PREFS = { dur: 5, fade: 10, vol: 65, tone: 35, screen: true, updated: 0 };
+  const DEFAULT_PREFS = { dur: 1, fadeMode: "calm", vol: 65, tone: 35, screen: true, updated: 0 };
   const WIN_START = 20;          // aikajana alkaa klo 20
   const WIN_HOURS = 12;          // ja päättyy klo 8
   const RECENT_MS = 180000;      // 3 min: uusi napautus ei tee tuplamerkintää
@@ -530,11 +578,15 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
   const toLocalInput = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const newId = (t) => "e" + t.toString(36) + Math.random().toString(36).slice(2, 8);
-  const numFi = (x) => String(Math.round(x * 10) / 10).replace(".", ",");
-  const fmtMin = (m) => {
-    if (m >= 60) { const h = Math.floor(m / 60), r = Math.round(m - h * 60); return h + " h" + (r ? " " + r + " min" : ""); }
-    return numFi(m) + " min";
+  // Kesto minuutteina luettavaksi: 0.25 → "15 s", 3.5 → "3 min 30 s", 290 → "4 h 50 min".
+  const fmtDur = (m) => {
+    const sec = Math.round(m * 60);
+    if (sec < 60) return sec + " s";
+    if (sec < 3600) { const mi = Math.floor(sec / 60), s = sec % 60; return mi + " min" + (s ? " " + s + " s" : ""); }
+    const h = Math.floor(sec / 3600), mi = Math.floor((sec % 3600) / 60);
+    return h + " h" + (mi ? " " + mi + " min" : "");
   };
+  const fmtLeft = (ms) => fmtDur(Math.max(0, Math.ceil(ms / 1000)) / 60);
 
   // ---------- tila ----------
   // Kaikki tiedot ovat vain tämän selaimen localStoragessa. Sivu ei lähetä mitään minnekään.
@@ -581,7 +633,8 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     if (!p || typeof p !== "object") return o;
     const ok = (v, lo, hi) => typeof v === "number" && isFinite(v) && v >= lo && v <= hi;
     if (ok(p.dur, 0, 720)) o.dur = p.dur;
-    if (ok(p.fade, 0.05, 60)) o.fade = p.fade;
+    if (typeof p.fadeMode === "string" && FADE_RULES[p.fadeMode]) o.fadeMode = p.fadeMode;
+    else if (ok(p.fade, 0, 60)) o.fadeMode = p.fade >= 20 ? "slow" : p.fade <= 1 ? "fast" : "calm";   // aiempi minuuttiasetus
     if (ok(p.vol, 0, 100)) o.vol = Math.round(p.vol);
     if (ok(p.tone, 0, 100)) o.tone = Math.round(p.tone);
     if (typeof p.screen === "boolean") o.screen = p.screen;
@@ -725,6 +778,12 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     N.nodes.lp.frequency.setTargetAtTime(Math.min(tv.lp, N.ctx.sampleRate / 2 - 200), t, 0.05);
   }
 
+  // Hiljenemisen pituus sekunteina: osuus kestosta, kuitenkin enintään valinnan yläraja.
+  function fadeSeconds(durSec, mode) {
+    const r = FADE_RULES[mode] || FADE_RULES.calm;
+    return Math.max(2, Math.min(durSec * r[0], r[1], durSec - FADE_IN));
+  }
+
   // Ajastettu hiljeneminen ajetaan äänisäikeessä, joten se toimii vaikka sivu olisi taustalla.
   // Hiljeneminen on tasainen desibeleinä (eksponentiaalinen), jolloin korva ei huomaa yhtäkkistä muutosta.
   function planSchedule(s, t, from) {
@@ -736,9 +795,9 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     const sch = { t0: t, v0, tf: null, tEnd: null };
     s.end = null;
     s.fadeAt = null;
-    if (prefs.dur > 0) {
-      const dur = prefs.dur * 60;
-      const fade = Math.max(3, Math.min(prefs.fade * 60, dur / 2));
+    if (s.dur > 0) {
+      const dur = s.dur * 60;
+      const fade = fadeSeconds(dur, prefs.fadeMode);
       sch.tEnd = t + dur;
       sch.tf = Math.max(t + FADE_IN, sch.tEnd - fade);
       g.setValueAtTime(1, sch.tf);
@@ -752,6 +811,7 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     clearTimeout(N.endTimer);
     if (s.end) N.endTimer = setTimeout(() => onEndTimer(s), s.end - Date.now() + 400);
     writeHeartbeat();
+    armFastTick();
   }
   function fadeValueAt(s, t) {
     const c = s.sched;
@@ -763,7 +823,8 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     return 0;
   }
 
-  function noiseStart(eventId, now) {
+  // durMin: kesto minuutteina; oletuksena asetusten kesto. 0 = soi, kunnes lopetetaan (Kuuntele kohinaa).
+  function noiseStart(eventId, now, durMin) {
     if (N.session) return true;
     const ctx = ensureAudio();
     if (!ctx) { setFootNote("Tämä selain ei pysty soittamaan kohinaa.", true); return false; }
@@ -786,7 +847,9 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
       return false;
     }
     N.srcs = srcs;
-    const s = { id: ++N.seq, eventId: eventId || null, s: now, wall0: now, ctx0: t, end: null, fadeAt: null, sched: null, ran: ctx.state === "running" };
+    const untimed = durMin === 0;
+    const s = { id: ++N.seq, eventId: eventId || null, s: now, wall0: now, ctx0: t, end: null, fadeAt: null, sched: null, ran: ctx.state === "running",
+      dur: untimed ? 0 : prefs.dur, untimed };
     N.session = s;
     footNote = "";
     clearTimeout(footTimer);
@@ -798,11 +861,33 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     return true;
   }
 
-  function replan() {
+  // Ajastin alkaa alusta. newDuration: asetusten kesto muuttui (ei koske ajastimetonta kuuntelua).
+  function replan(newDuration) {
     const s = N.session;
     if (!s || !N.ctx) return;
+    if (newDuration && !s.untimed) s.dur = prefs.dur;
     const t = N.ctx.currentTime;
     planSchedule(s, t, fadeValueAt(s, t));
+  }
+  // Ajastetusta kohinasta tulee ajastimeton: soi, kunnes lopetetaan.
+  function makeUntimed() {
+    const s = N.session;
+    if (!s || !N.ctx || s.untimed) return;
+    s.untimed = true;
+    s.dur = 0;
+    const t = N.ctx.currentTime;
+    planSchedule(s, t, fadeValueAt(s, t));
+    render();
+  }
+
+  // Lyhyillä kestoilla jäljellä oleva aika päivitetään kerran sekunnissa. Vain tekstit päivittyvät,
+  // jotta lokin painikkeet eivät vaihdu kesken napautuksen.
+  let fastTimer = null;
+  function armFastTick() {
+    const s = N.session;
+    const want = !!(s && s.end && s.end - Date.now() < 125000);
+    if (want && !fastTimer) fastTimer = setInterval(() => { updateNoiseLabels(); armFastTick(); }, 1000);
+    else if (!want && fastTimer) { clearInterval(fastTimer); fastTimer = null; }
   }
 
   function onEndTimer(s) {
@@ -860,6 +945,7 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     }
     syncScreen();
     clearHeartbeat();
+    armFastTick();
     scheduleDim();
     if (s.eventId) closeSegment(s.eventId, s.s, endWall, reason === "interrupted");
     if (reason === "interrupted") setFootNote("Kohina katkesi noin klo " + fmtTime(new Date(endWall)) + ", kun näyttö lukittui tai ääni keskeytyi.", true);
@@ -948,10 +1034,21 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     render();
   }
 
+  // Alle kahden minuutin päästä loppuvalle kohinalle näytetään sekuntilaskuri, pidemmälle kellonaika.
   function noiseSub(s) {
     if (!s.end) return "soi, kunnes lopetat";
+    const now = Date.now(), left = s.end - now, fading = now >= s.fadeAt;
+    if (left < 120000) return (fading ? "hiljenee nyt · loppuu " : "loppuu ") + fmtLeft(left) + " kuluttua";
     const endT = fmtTime(new Date(s.end));
-    return Date.now() >= s.fadeAt ? "hiljenee nyt · hiljaista klo " + endT : "hiljenee klo " + endT + " mennessä";
+    return fading ? "hiljenee nyt · hiljaista klo " + endT : "hiljenee klo " + endT + " mennessä";
+  }
+  const nowText = (s) => (s.end ? "Kohina soi: " + noiseSub(s) + "." : "Kohina soi, kunnes lopetat sen.");
+  // Päivittää vain kohinan tilatekstit (sekuntilaskuri), ei muuta näkymää.
+  function updateNoiseLabels() {
+    const s = N.session;
+    if (!s) return;
+    if (!$("#night").hidden) $("#zn-sub").textContent = noiseSub(s);
+    if (!$("#prefs").hidden) $("#p-now").textContent = nowText(s);
   }
   function segLabel(g, forReport) {
     const a = fmtTime(new Date(g.s));
@@ -1057,7 +1154,7 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
 
     const s = N.session;
     const latest = latestId ? evs.find((e) => e.id === latestId) : null;
-    const dur = prefs.dur > 0 ? fmtMin(prefs.dur) : "";
+    const dur = prefs.dur > 0 ? fmtDur(prefs.dur) : "";
 
     const zn = $("#zone-noise");
     zn.classList.toggle("is-playing", !!s);
@@ -1122,7 +1219,7 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
       '<div class="field"><span class="field-label" id="kl-' + id + '">Ääni</span><div class="chips" role="group" aria-labelledby="kl-' + id + '">' + chipsHTML(KINDS, id, e.kind, "kind") + "</div></div>" +
       '<div class="field"><span class="field-label" id="al-' + id + '">Valvoin</span><div class="chips" role="group" aria-labelledby="al-' + id + '">' + chipsHTML(AWAKES, id, e.awake, "awake") + "</div></div>" +
       '<label class="sr" for="n-' + id + '">Muistiinpano</label>' +
-      '<input class="note" id="n-' + id + '" type="text" maxlength="300" autocomplete="off" placeholder="Muistiinpano, esim. huutoa noin 10 min" value="' + esc(e.note || "") + '" data-id="' + id + '">' +
+      '<input class="note" id="n-' + id + '" type="text" maxlength="300" autocomplete="off" placeholder="Muistiinpano, esim. ääni kesti noin 10 min" value="' + esc(e.note || "") + '" data-id="' + id + '">' +
     "</article>";
   }
 
@@ -1171,16 +1268,30 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     }
   }
 
-  function fadeHelp() {
-    if (prefs.dur <= 0) return "Ilman ajastinta kohina soi, kunnes lopetat sen. Lopettaessa se hiljenee parissa sekunnissa.";
-    const eff = Math.max(0.05, Math.min(prefs.fade, prefs.dur / 2));
-    return "Kohina soi täysillä " + fmtMin(prefs.dur - eff) + " ja hiljenee sitten " + numFi(eff) + " minuutissa kokonaan." +
-      (eff < prefs.fade ? " Hiljeneminen on enintään puolet kestosta." : "");
+  // Äänen kulku ajastimen aikana: pehmeä alku, täysi voimakkuus ja hiljeneminen.
+  // Hiljeneminen piirretään suorana, koska se on tasainen desibeleinä eli korvan kannalta.
+  function drawEnvelope() {
+    const W = 320, TOP = 6, BOT = 64;
+    let d, cap;
+    if (prefs.dur <= 0) {
+      d = "M0 " + BOT + " L10 " + TOP + " L" + W + " " + TOP;
+      cap = "Ilman ajastinta kohina soi täysillä, kunnes lopetat sen. Lopetus hiljentää sen parissa sekunnissa.";
+    } else {
+      const dur = prefs.dur * 60, fade = fadeSeconds(dur, prefs.fadeMode);
+      const xi = Math.max(3, Math.min(24, (W * FADE_IN) / dur));
+      const xf = Math.max(xi, (W * (dur - fade)) / dur);
+      d = "M0 " + BOT + " L" + xi.toFixed(1) + " " + TOP + " L" + xf.toFixed(1) + " " + TOP + " L" + W + " " + BOT;
+      const fadeR = Math.round(fade), fullR = Math.round(dur) - fadeR;   // pyöristetyt osat täsmäävät kokonaisaikaan
+      cap = "Soi täysillä " + fmtDur(fullR / 60) + " ja hiljenee sitten " + fmtDur(fadeR / 60) + " aikana. Yhteensä " + fmtDur(prefs.dur) + ".";
+    }
+    $("#env-line").setAttribute("d", d);
+    $("#env-fill").setAttribute("d", d + " L" + W + " " + BOT + " Z");
+    $("#env-cap").textContent = cap;
   }
   function drawPrefs() {
     $("#p-dur").innerHTML = chipsHTML(DURS, "p", prefs.dur, "p-dur");
-    $("#p-fade").innerHTML = chipsHTML(FADES, "p", prefs.fade, "p-fade", prefs.dur <= 0);
-    $("#p-fade-help").textContent = fadeHelp();
+    $("#p-fade").innerHTML = chipsHTML(FADES, "p", prefs.fadeMode, "p-fade", prefs.dur <= 0);
+    drawEnvelope();
     const vol = $("#p-vol"), tone = $("#p-tone");
     if (document.activeElement !== vol) vol.value = String(prefs.vol);
     if (document.activeElement !== tone) tone.value = String(prefs.tone);
@@ -1188,10 +1299,13 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     tone.style.setProperty("--p", tone.value + "%");
     $("#p-vol-out").textContent = prefs.vol + " %";
     const s = N.session;
-    $("#p-listen").textContent = s ? "Lopeta kohina" : "Kuuntele kohinaa";
+    $("#p-listen").classList.toggle("is-on", !!s);
+    $("#p-listen-text").textContent = s ? "Lopeta kohina" : "Kuuntele kohinaa";
+    $("#p-listen-glyph").setAttribute("d", s ? "M7 7h10v10H7z" : "M8 5v14l11-7z");
+    $("#p-untimed").hidden = !(s && !s.untimed && s.end);
     const now = $("#p-now");
     now.hidden = !s;
-    now.textContent = s ? "Kohina soi: " + noiseSub(s) + "." : "";
+    now.textContent = s ? nowText(s) : "";
     $("#p-screen").innerHTML = chipsHTML(SCREENS, "p", prefs.screen ? 1 : 0, "p-screen");
     $("#p-screen-help").textContent = prefs.screen
       ? "Kun yönäkymä on auki, puhelin ei sammuta näyttöä. Näyttö himmenee 20 sekunnissa lähes mustaksi, ja voit kirjata heräämisen avaamatta puhelimen lukitusta. Ilman laturia akkua kuluu yön aikana, joten katso ensimmäisenä aamuna, paljonko."
@@ -1212,7 +1326,7 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     const first = groups[0].start;
     const lastEnd = addDays(groups[groups.length - 1].start, 1);
     const lines = [
-      "Häiriöloki: heräämiset ääniin",
+      "Yöloki: heräämiset ääniin",
       "Ajalta " + fmtDM(first) + (first.getFullYear() !== lastEnd.getFullYear() ? first.getFullYear() : "") + "–" + fmtDM(lastEnd) + lastEnd.getFullYear() +
         ": " + countWake(evs.length) + " " + groups.length + " yönä.",
       ""
@@ -1339,16 +1453,17 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
     announce(N.session ? "Merkintä peruttu. Kohina jatkuu." : "Merkintä peruttu");
   }
 
+  // Kuuntelu soi ilman ajastinta, kunnes se lopetetaan, eikä se kirjaa heräämistä.
   function onListen() {
     if (N.session) stopNoise();
-    else noiseStart(null, Date.now());
+    else noiseStart(null, Date.now(), 0);
     render();
   }
   function setPref(k, v) {
     if (prefs[k] === v) return;
     prefs[k] = v;
     savePrefs();
-    if (N.session && (k === "dur" || k === "fade")) replan();
+    if (N.session && (k === "dur" || k === "fadeMode")) replan(true);
     if (k === "screen") { syncScreen(true); scheduleDim(); }
     render();
   }
@@ -1446,7 +1561,7 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
   }
   // Raportti ladataan tekstitiedostona suoraan selaimesta, ilman palvelinta.
   function onDownload() {
-    const name = "hairioloki-" + dayKey(new Date()) + ".txt";
+    const name = "yoloki-" + dayKey(new Date()) + ".txt";
     try {
       const blob = new Blob([buildReport(allEvents())], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -1494,7 +1609,8 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
       case "noise-stop": stopNoise(); break;
       case "listen": onListen(); break;
       case "p-dur": setPref("dur", Number(val)); break;
-      case "p-fade": setPref("fade", Number(val)); break;
+      case "p-fade": setPref("fadeMode", val); break;
+      case "untimed": makeUntimed(); break;
       case "p-screen": setPref("screen", val === "1"); break;
       case "add-open": openAdd(); break;
       case "add-cancel": closeAdd(); break;
@@ -1533,6 +1649,16 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
   document.addEventListener("focusout", () => { setTimeout(() => { if (listDirty) render(); }, 0); });
   document.addEventListener("pointerdown", wakeScreen, true);
   document.addEventListener("keydown", wakeScreen, true);
+  // Tietokoneella hiiren liike ja vieritys kirkastavat himmennetyn näkymän. Puhelimella sen tekee kosketus.
+  let lastNudge = 0;
+  const nudge = () => {
+    const now = Date.now();
+    if (now - lastNudge < 500) return;
+    lastNudge = now;
+    wakeScreen();
+  };
+  document.addEventListener("pointermove", (ev) => { if (ev.pointerType === "mouse") nudge(); }, { passive: true });
+  document.addEventListener("wheel", nudge, { passive: true });
   $("#add").addEventListener("submit", (ev) => { ev.preventDefault(); saveAdd(); });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
@@ -1560,7 +1686,9 @@ body.is-dim .night { opacity: .1; transition: opacity 6s ease; }
         writeHeartbeat();
         if (s.end && Date.now() > s.end + 3000) noiseFinish("timer", s.end);
       }
-      render();
+      armFastTick();
+      // Lokin ja asetusten painikkeita ei piirretä uudelleen kesken käytön: niissä päivittyy vain teksti.
+      if (!$("#night").hidden) render(); else updateNoiseLabels();
     }
   }
 
